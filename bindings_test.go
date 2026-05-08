@@ -606,3 +606,21 @@ func TestComprehensiveBindings_LineNumbers(t *testing.T) {
 	require.NotNil(t, lowMQTT.GetRootNode())
 	assert.Greater(t, lowMQTT.GetRootNode().Line, 0, "Line number should be set")
 }
+
+func TestComprehensiveBindings_SQSRenderRoundTrip(t *testing.T) {
+	spec, err := os.ReadFile("test_fixtures/comprehensive-bindings.yaml")
+	require.NoError(t, err)
+
+	doc, err := NewDocument(spec)
+	require.NoError(t, err)
+
+	rendered, err := doc.Render()
+	require.NoError(t, err)
+
+	output := string(rendered)
+	assert.Contains(t, output, "sqs:")
+	assert.Contains(t, output, "findings-worker")
+	assert.Contains(t, output, "deadLetterQueue:")
+	assert.Contains(t, output, "bindingVersion: 0.3.0")
+	assert.Contains(t, output, "audit-events.fifo")
+}
