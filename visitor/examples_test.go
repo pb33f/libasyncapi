@@ -574,3 +574,54 @@ channels:
 	assert.NotContains(t, stopper.Paths, "/channels/users",
 		"Traversal should have stopped before reaching /channels/users")
 }
+
+func TestWalkerVisitsSQSBindings(t *testing.T) {
+	doc, err := libasyncapi.NewDocument([]byte(`asyncapi: "3.0.0"
+info:
+  title: SQS Test
+  version: "1.0.0"
+servers:
+  sqsServer:
+    host: sqs.us-east-1.amazonaws.com
+    protocol: sqs
+    bindings:
+      sqs: {}
+channels:
+  workerQueue:
+    address: worker
+    bindings:
+      sqs:
+        queue:
+          name: worker
+          fifoQueue: false
+        bindingVersion: 0.3.0
+operations:
+  receiveWorkerQueue:
+    action: receive
+    channel:
+      $ref: '#/channels/workerQueue'
+    bindings:
+      sqs:
+        queues:
+          - name: worker
+            fifoQueue: false
+        bindingVersion: 0.3.0
+components:
+  messages:
+    WorkerMessage:
+      payload:
+        type: object
+      bindings:
+        sqs: {}
+`))
+	require.NoError(t, err)
+
+	recorder := &PathRecorder{}
+	walker := visitor.NewWalker(recorder)
+	require.NoError(t, walker.Walk(context.Background(), doc.Model()))
+
+	assert.Contains(t, recorder.Paths, "/servers/sqsServer/bindings/sqs")
+	assert.Contains(t, recorder.Paths, "/channels/workerQueue/bindings/sqs")
+	assert.Contains(t, recorder.Paths, "/operations/receiveWorkerQueue/bindings/sqs")
+	assert.Contains(t, recorder.Paths, "/components/messages/WorkerMessage/bindings/sqs")
+}

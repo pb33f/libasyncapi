@@ -110,13 +110,13 @@ func (w *Walker) walkNode(ctx context.Context, node any) error {
 	case *highbase.Schema:
 		return w.walkSchema(ctx, n)
 	// Binding types - visit but no children to walk
-	case *asyncapi.HTTPServerBinding, *asyncapi.KafkaServerBinding, *asyncapi.MQTTServerBinding:
+	case *asyncapi.HTTPServerBinding, *asyncapi.KafkaServerBinding, *asyncapi.MQTTServerBinding, *asyncapi.SQSServerBinding:
 		return nil
-	case *asyncapi.HTTPChannelBinding, *asyncapi.WebSocketChannelBinding, *asyncapi.KafkaChannelBinding, *asyncapi.AMQPChannelBinding:
+	case *asyncapi.HTTPChannelBinding, *asyncapi.WebSocketChannelBinding, *asyncapi.KafkaChannelBinding, *asyncapi.AMQPChannelBinding, *asyncapi.SQSChannelBinding:
 		return nil
-	case *asyncapi.HTTPOperationBinding, *asyncapi.KafkaOperationBinding, *asyncapi.AMQPOperationBinding, *asyncapi.MQTTOperationBinding:
+	case *asyncapi.HTTPOperationBinding, *asyncapi.KafkaOperationBinding, *asyncapi.AMQPOperationBinding, *asyncapi.MQTTOperationBinding, *asyncapi.SQSOperationBinding:
 		return nil
-	case *asyncapi.HTTPMessageBinding, *asyncapi.KafkaMessageBinding, *asyncapi.AMQPMessageBinding, *asyncapi.MQTTMessageBinding:
+	case *asyncapi.HTTPMessageBinding, *asyncapi.KafkaMessageBinding, *asyncapi.AMQPMessageBinding, *asyncapi.MQTTMessageBinding, *asyncapi.SQSMessageBinding:
 		return nil
 	// Reference types - leaf nodes (resolved items are visited in their collections)
 	case *low.Reference:
@@ -222,6 +222,11 @@ func (w *Walker) walkServerBindings(ctx context.Context, bindings *asyncapi.Serv
 			return err
 		}
 	}
+	if bindings.SQS != nil {
+		if err := w.walkNode(AppendPath(childCtx, "sqs"), bindings.SQS); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -275,6 +280,11 @@ func (w *Walker) walkChannelBindings(ctx context.Context, bindings *asyncapi.Cha
 	}
 	if bindings.AMQP != nil {
 		if err := w.walkNode(AppendPath(childCtx, "amqp"), bindings.AMQP); err != nil {
+			return err
+		}
+	}
+	if bindings.SQS != nil {
+		if err := w.walkNode(AppendPath(childCtx, "sqs"), bindings.SQS); err != nil {
 			return err
 		}
 	}
@@ -341,6 +351,11 @@ func (w *Walker) walkOperationBindings(ctx context.Context, bindings *asyncapi.O
 	}
 	if bindings.MQTT != nil {
 		if err := w.walkNode(AppendPath(childCtx, "mqtt"), bindings.MQTT); err != nil {
+			return err
+		}
+	}
+	if bindings.SQS != nil {
+		if err := w.walkNode(AppendPath(childCtx, "sqs"), bindings.SQS); err != nil {
 			return err
 		}
 	}
@@ -517,6 +532,11 @@ func (w *Walker) walkMessageBindings(ctx context.Context, bindings *asyncapi.Mes
 	}
 	if bindings.MQTT != nil {
 		if err := w.walkNode(AppendPath(childCtx, "mqtt"), bindings.MQTT); err != nil {
+			return err
+		}
+	}
+	if bindings.SQS != nil {
+		if err := w.walkNode(AppendPath(childCtx, "sqs"), bindings.SQS); err != nil {
 			return err
 		}
 	}
