@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.yaml.in/yaml/v4"
 )
 
 func TestComprehensiveBindings_KafkaServerBinding(t *testing.T) {
@@ -314,6 +315,194 @@ func TestComprehensiveBindings_MQTTMessageBinding(t *testing.T) {
 	assert.Equal(t, "/response/topic", mqtt.ResponseTopic)
 	assert.Equal(t, "0.2.0", mqtt.BindingVersion)
 	require.NotNil(t, mqtt.CorrelationData)
+}
+
+func TestComprehensiveBindings_SQSServerBinding(t *testing.T) {
+	spec, err := os.ReadFile("test_fixtures/comprehensive-bindings.yaml")
+	require.NoError(t, err)
+
+	doc, err := NewDocument(spec)
+	require.NoError(t, err)
+
+	model := doc.Model()
+	require.NotNil(t, model)
+
+	server, ok := model.Servers.Get("sqs-server")
+	require.True(t, ok)
+	require.NotNil(t, server.Bindings)
+	require.NotNil(t, server.Bindings.SQS)
+	require.NotNil(t, server.Bindings.SQS.Extensions)
+
+	ext, ok := server.Bindings.SQS.Extensions.Get("x-server-binding-ext")
+	require.True(t, ok)
+	assert.NotNil(t, ext)
+}
+
+func TestComprehensiveBindings_SQSChannelBinding(t *testing.T) {
+	spec, err := os.ReadFile("test_fixtures/comprehensive-bindings.yaml")
+	require.NoError(t, err)
+
+	doc, err := NewDocument(spec)
+	require.NoError(t, err)
+
+	model := doc.Model()
+	require.NotNil(t, model)
+
+	channel, ok := model.Channels.Get("sqs-channel")
+	require.True(t, ok)
+	require.NotNil(t, channel.Bindings)
+	require.NotNil(t, channel.Bindings.SQS)
+
+	sqs := channel.Bindings.SQS
+	assert.Equal(t, "0.3.0", sqs.BindingVersion)
+	require.NotNil(t, sqs.Queue)
+	assert.Equal(t, "findings-worker", sqs.Queue.Name)
+	assert.False(t, sqs.Queue.FifoQueue)
+	assert.Equal(t, 60, sqs.Queue.VisibilityTimeout)
+	assert.Equal(t, 20, sqs.Queue.ReceiveMessageWaitTime)
+	assert.Equal(t, 345600, sqs.Queue.MessageRetentionPeriod)
+
+	require.NotNil(t, sqs.Queue.RedrivePolicy)
+	require.NotNil(t, sqs.Queue.RedrivePolicy.DeadLetterQueue)
+	assert.Equal(t, "findings-worker-dlq", sqs.Queue.RedrivePolicy.DeadLetterQueue.Name)
+	assert.Equal(t, 5, sqs.Queue.RedrivePolicy.MaxReceiveCount)
+
+	require.NotNil(t, sqs.Queue.Policy)
+	require.Len(t, sqs.Queue.Policy.Statements, 1)
+	statement := sqs.Queue.Policy.Statements[0]
+	assert.Equal(t, "Allow", statement.Effect)
+	require.NotNil(t, statement.Principal)
+	assert.Equal(t, yaml.MappingNode, statement.Principal.Kind)
+	require.NotNil(t, statement.Action)
+	assert.Equal(t, yaml.SequenceNode, statement.Action.Kind)
+	require.Len(t, statement.Action.Content, 1)
+	assert.Equal(t, "sqs:SendMessage", statement.Action.Content[0].Value)
+	require.NotNil(t, statement.Resource)
+	assert.Equal(t, yaml.ScalarNode, statement.Resource.Kind)
+	assert.Equal(t, "arn:aws:sqs:us-east-1:123456789012:findings-worker", statement.Resource.Value)
+	require.NotNil(t, statement.Condition)
+	assert.Equal(t, yaml.MappingNode, statement.Condition.Kind)
+
+	require.NotNil(t, sqs.Queue.Tags)
+	assert.Equal(t, "linus", sqs.Queue.Tags["owner"])
+	assert.Equal(t, "findings", sqs.Queue.Tags["service"])
+
+	require.NotNil(t, sqs.DeadLetterQueue)
+	assert.Equal(t, "findings-worker-dlq", sqs.DeadLetterQueue.Name)
+	assert.False(t, sqs.DeadLetterQueue.FifoQueue)
+	assert.Equal(t, 1209600, sqs.DeadLetterQueue.MessageRetentionPeriod)
+
+	require.NotNil(t, sqs.Extensions)
+	ext, ok := sqs.Extensions.Get("x-sqs-channel-ext")
+	require.True(t, ok)
+	assert.NotNil(t, ext)
+}
+
+func TestComprehensiveBindings_SQSFIFOChannelBinding(t *testing.T) {
+	spec, err := os.ReadFile("test_fixtures/comprehensive-bindings.yaml")
+	require.NoError(t, err)
+
+	doc, err := NewDocument(spec)
+	require.NoError(t, err)
+
+	model := doc.Model()
+	require.NotNil(t, model)
+
+	channel, ok := model.Channels.Get("sqs-fifo-channel")
+	require.True(t, ok)
+	require.NotNil(t, channel.Bindings)
+	require.NotNil(t, channel.Bindings.SQS)
+	require.NotNil(t, channel.Bindings.SQS.Queue)
+
+	queue := channel.Bindings.SQS.Queue
+	assert.Equal(t, "audit-events.fifo", queue.Name)
+	assert.True(t, queue.FifoQueue)
+	assert.Equal(t, "messageGroup", queue.DeduplicationScope)
+	assert.Equal(t, "perMessageGroupId", queue.FifoThroughputLimit)
+	assert.Equal(t, 15, queue.DeliveryDelay)
+	assert.Equal(t, 45, queue.VisibilityTimeout)
+	assert.Equal(t, 10, queue.ReceiveMessageWaitTime)
+	assert.Equal(t, 86400, queue.MessageRetentionPeriod)
+	assert.Equal(t, "fifo", queue.Tags["queue_kind"])
+}
+
+func TestComprehensiveBindings_SQSOperationBinding(t *testing.T) {
+	spec, err := os.ReadFile("test_fixtures/comprehensive-bindings.yaml")
+	require.NoError(t, err)
+
+	doc, err := NewDocument(spec)
+	require.NoError(t, err)
+
+	model := doc.Model()
+	require.NotNil(t, model)
+
+	op, ok := model.Operations.Get("sqs-operation")
+	require.True(t, ok)
+	require.NotNil(t, op.Bindings)
+	require.NotNil(t, op.Bindings.SQS)
+
+	sqs := op.Bindings.SQS
+	assert.Equal(t, "0.3.0", sqs.BindingVersion)
+	require.Len(t, sqs.Queues, 2)
+	assert.Equal(t, "findings-worker", sqs.Queues[0].Name)
+	assert.False(t, sqs.Queues[0].FifoQueue)
+	assert.Equal(t, "findings-worker-dlq", sqs.Queues[1].Name)
+	assert.False(t, sqs.Queues[1].FifoQueue)
+}
+
+func TestComprehensiveBindings_SQSMessageBinding(t *testing.T) {
+	spec, err := os.ReadFile("test_fixtures/comprehensive-bindings.yaml")
+	require.NoError(t, err)
+
+	doc, err := NewDocument(spec)
+	require.NoError(t, err)
+
+	model := doc.Model()
+	require.NotNil(t, model)
+
+	msg, ok := model.Components.Messages.Get("sqsMessage")
+	require.True(t, ok)
+	require.NotNil(t, msg.Bindings)
+	require.NotNil(t, msg.Bindings.SQS)
+	require.NotNil(t, msg.Bindings.SQS.Extensions)
+
+	ext, ok := msg.Bindings.SQS.Extensions.Get("x-sqs-message-ext")
+	require.True(t, ok)
+	assert.NotNil(t, ext)
+}
+
+func TestComprehensiveBindings_SQSGoLowHashAndLineNumbers(t *testing.T) {
+	spec, err := os.ReadFile("test_fixtures/comprehensive-bindings.yaml")
+	require.NoError(t, err)
+
+	doc, err := NewDocument(spec)
+	require.NoError(t, err)
+
+	model := doc.Model()
+	require.NotNil(t, model)
+
+	server, _ := model.Servers.Get("sqs-server")
+	require.NotNil(t, server.Bindings.SQS.GoLow())
+	require.NotNil(t, server.Bindings.SQS.GoLowUntyped())
+	require.NotNil(t, server.Bindings.SQS.GoLow().GetRootNode())
+	assert.Greater(t, server.Bindings.SQS.GoLow().GetRootNode().Line, 0)
+
+	channel, _ := model.Channels.Get("sqs-channel")
+	require.NotNil(t, channel.Bindings.SQS.GoLow())
+	require.NotNil(t, channel.Bindings.SQS.Queue.GoLow())
+	require.NotNil(t, channel.Bindings.SQS.Queue.RedrivePolicy.GoLow())
+	require.NotNil(t, channel.Bindings.SQS.Queue.Policy.GoLow())
+	require.NotNil(t, channel.Bindings.SQS.DeadLetterQueue.GoLow())
+
+	hash1 := channel.Bindings.SQS.GoLow().Hash()
+	hash2 := channel.Bindings.SQS.GoLow().Hash()
+	assert.Equal(t, hash1, hash2)
+
+	op, _ := model.Operations.Get("sqs-operation")
+	require.NotNil(t, op.Bindings.SQS.GoLow())
+
+	msg, _ := model.Components.Messages.Get("sqsMessage")
+	require.NotNil(t, msg.Bindings.SQS.GoLow())
 }
 
 func TestComprehensiveBindings_HTTPMessageBinding(t *testing.T) {

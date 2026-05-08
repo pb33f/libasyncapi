@@ -4,9 +4,9 @@
 package asyncapi
 
 import (
+	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/high"
 	highbase "github.com/pb33f/libopenapi/datamodel/high/base"
-	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/orderedmap"
 	"go.yaml.in/yaml/v4"
 )
@@ -122,6 +122,306 @@ func (h *HTTPMessageBinding) GoLow() *lowasync.HTTPMessageBinding { return h.low
 
 // GoLowUntyped returns the low-level HTTPMessageBinding with no type.
 func (h *HTTPMessageBinding) GoLowUntyped() any { return h.low }
+
+// SQS Server Binding
+
+// SQSServerBinding represents a high-level SQS Server Binding.
+type SQSServerBinding struct {
+	Extensions *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
+	low        *lowasync.SQSServerBinding
+}
+
+// NewSQSServerBinding creates a new high-level SQSServerBinding.
+func NewSQSServerBinding(b *lowasync.SQSServerBinding) *SQSServerBinding {
+	s := new(SQSServerBinding)
+	s.low = b
+	if orderedmap.Len(b.Extensions) > 0 {
+		s.Extensions = high.ExtractExtensions(b.Extensions)
+	}
+	return s
+}
+
+// GoLow returns the low-level SQSServerBinding.
+func (s *SQSServerBinding) GoLow() *lowasync.SQSServerBinding { return s.low }
+
+// GoLowUntyped returns the low-level SQSServerBinding with no type.
+func (s *SQSServerBinding) GoLowUntyped() any { return s.low }
+
+// SQS Channel Binding
+
+// SQSChannelBinding represents a high-level SQS Channel Binding.
+type SQSChannelBinding struct {
+	Queue           *SQSQueue                           `json:"queue,omitempty" yaml:"queue,omitempty"`
+	DeadLetterQueue *SQSQueue                           `json:"deadLetterQueue,omitempty" yaml:"deadLetterQueue,omitempty"`
+	BindingVersion  string                              `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
+	Extensions      *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
+	low             *lowasync.SQSChannelBinding
+}
+
+// NewSQSChannelBinding creates a new high-level SQSChannelBinding.
+func NewSQSChannelBinding(b *lowasync.SQSChannelBinding) *SQSChannelBinding {
+	s := new(SQSChannelBinding)
+	s.low = b
+	s.BindingVersion = b.BindingVersion.Value
+	if !b.Queue.IsEmpty() {
+		s.Queue = NewSQSQueue(b.Queue.Value)
+	}
+	if !b.DeadLetterQueue.IsEmpty() {
+		s.DeadLetterQueue = NewSQSQueue(b.DeadLetterQueue.Value)
+	}
+	if orderedmap.Len(b.Extensions) > 0 {
+		s.Extensions = high.ExtractExtensions(b.Extensions)
+	}
+	return s
+}
+
+// GoLow returns the low-level SQSChannelBinding.
+func (s *SQSChannelBinding) GoLow() *lowasync.SQSChannelBinding { return s.low }
+
+// GoLowUntyped returns the low-level SQSChannelBinding with no type.
+func (s *SQSChannelBinding) GoLowUntyped() any { return s.low }
+
+// SQS Operation Binding
+
+// SQSOperationBinding represents a high-level SQS Operation Binding.
+type SQSOperationBinding struct {
+	Queues         []*SQSIdentifier                    `json:"queues,omitempty" yaml:"queues,omitempty"`
+	BindingVersion string                              `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
+	Extensions     *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
+	low            *lowasync.SQSOperationBinding
+}
+
+// NewSQSOperationBinding creates a new high-level SQSOperationBinding.
+func NewSQSOperationBinding(b *lowasync.SQSOperationBinding) *SQSOperationBinding {
+	s := new(SQSOperationBinding)
+	s.low = b
+	s.BindingVersion = b.BindingVersion.Value
+	if b.Queues.Value != nil {
+		for _, queue := range b.Queues.Value {
+			s.Queues = append(s.Queues, NewSQSIdentifier(queue.Value))
+		}
+	}
+	if orderedmap.Len(b.Extensions) > 0 {
+		s.Extensions = high.ExtractExtensions(b.Extensions)
+	}
+	return s
+}
+
+// GoLow returns the low-level SQSOperationBinding.
+func (s *SQSOperationBinding) GoLow() *lowasync.SQSOperationBinding { return s.low }
+
+// GoLowUntyped returns the low-level SQSOperationBinding with no type.
+func (s *SQSOperationBinding) GoLowUntyped() any { return s.low }
+
+// SQS Message Binding
+
+// SQSMessageBinding represents a high-level SQS Message Binding.
+type SQSMessageBinding struct {
+	Extensions *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
+	low        *lowasync.SQSMessageBinding
+}
+
+// NewSQSMessageBinding creates a new high-level SQSMessageBinding.
+func NewSQSMessageBinding(b *lowasync.SQSMessageBinding) *SQSMessageBinding {
+	s := new(SQSMessageBinding)
+	s.low = b
+	if orderedmap.Len(b.Extensions) > 0 {
+		s.Extensions = high.ExtractExtensions(b.Extensions)
+	}
+	return s
+}
+
+// GoLow returns the low-level SQSMessageBinding.
+func (s *SQSMessageBinding) GoLow() *lowasync.SQSMessageBinding { return s.low }
+
+// GoLowUntyped returns the low-level SQSMessageBinding with no type.
+func (s *SQSMessageBinding) GoLowUntyped() any { return s.low }
+
+// SQSQueue represents high-level SQS queue configuration.
+type SQSQueue struct {
+	Name                   string                              `json:"name,omitempty" yaml:"name,omitempty"`
+	ARN                    string                              `json:"arn,omitempty" yaml:"arn,omitempty"`
+	FifoQueue              bool                                `json:"fifoQueue,omitempty" yaml:"fifoQueue,omitempty"`
+	DeduplicationScope     string                              `json:"deduplicationScope,omitempty" yaml:"deduplicationScope,omitempty"`
+	FifoThroughputLimit    string                              `json:"fifoThroughputLimit,omitempty" yaml:"fifoThroughputLimit,omitempty"`
+	DeliveryDelay          int                                 `json:"deliveryDelay,omitempty" yaml:"deliveryDelay,omitempty"`
+	VisibilityTimeout      int                                 `json:"visibilityTimeout,omitempty" yaml:"visibilityTimeout,omitempty"`
+	ReceiveMessageWaitTime int                                 `json:"receiveMessageWaitTime,omitempty" yaml:"receiveMessageWaitTime,omitempty"`
+	MessageRetentionPeriod int                                 `json:"messageRetentionPeriod,omitempty" yaml:"messageRetentionPeriod,omitempty"`
+	RedrivePolicy          *SQSRedrivePolicy                   `json:"redrivePolicy,omitempty" yaml:"redrivePolicy,omitempty"`
+	Policy                 *SQSPolicy                          `json:"policy,omitempty" yaml:"policy,omitempty"`
+	Tags                   map[string]string                   `json:"tags,omitempty" yaml:"tags,omitempty"`
+	Extensions             *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
+	low                    *lowasync.SQSQueue
+}
+
+// NewSQSQueue creates a new high-level SQSQueue.
+func NewSQSQueue(q *lowasync.SQSQueue) *SQSQueue {
+	s := new(SQSQueue)
+	s.low = q
+	s.Name = q.Name.Value
+	s.ARN = q.ARN.Value
+	s.FifoQueue = q.FifoQueue.Value
+	s.DeduplicationScope = q.DeduplicationScope.Value
+	s.FifoThroughputLimit = q.FifoThroughputLimit.Value
+	s.DeliveryDelay = q.DeliveryDelay.Value
+	s.VisibilityTimeout = q.VisibilityTimeout.Value
+	s.ReceiveMessageWaitTime = q.ReceiveMessageWaitTime.Value
+	s.MessageRetentionPeriod = q.MessageRetentionPeriod.Value
+	if !q.RedrivePolicy.IsEmpty() {
+		s.RedrivePolicy = NewSQSRedrivePolicy(q.RedrivePolicy.Value)
+	}
+	if !q.Policy.IsEmpty() {
+		s.Policy = NewSQSPolicy(q.Policy.Value)
+	}
+	if !q.Tags.IsEmpty() {
+		s.Tags = yamlStringMap(q.Tags.Value)
+	}
+	if orderedmap.Len(q.Extensions) > 0 {
+		s.Extensions = high.ExtractExtensions(q.Extensions)
+	}
+	return s
+}
+
+// GoLow returns the low-level SQSQueue.
+func (s *SQSQueue) GoLow() *lowasync.SQSQueue { return s.low }
+
+// GoLowUntyped returns the low-level SQSQueue with no type.
+func (s *SQSQueue) GoLowUntyped() any { return s.low }
+
+// SQSIdentifier represents a high-level SQS queue reference.
+type SQSIdentifier struct {
+	Name       string                              `json:"name,omitempty" yaml:"name,omitempty"`
+	ARN        string                              `json:"arn,omitempty" yaml:"arn,omitempty"`
+	FifoQueue  bool                                `json:"fifoQueue,omitempty" yaml:"fifoQueue,omitempty"`
+	Extensions *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
+	low        *lowasync.SQSIdentifier
+}
+
+// NewSQSIdentifier creates a new high-level SQSIdentifier.
+func NewSQSIdentifier(q *lowasync.SQSIdentifier) *SQSIdentifier {
+	s := new(SQSIdentifier)
+	s.low = q
+	s.Name = q.Name.Value
+	s.ARN = q.ARN.Value
+	s.FifoQueue = q.FifoQueue.Value
+	if orderedmap.Len(q.Extensions) > 0 {
+		s.Extensions = high.ExtractExtensions(q.Extensions)
+	}
+	return s
+}
+
+// GoLow returns the low-level SQSIdentifier.
+func (s *SQSIdentifier) GoLow() *lowasync.SQSIdentifier { return s.low }
+
+// GoLowUntyped returns the low-level SQSIdentifier with no type.
+func (s *SQSIdentifier) GoLowUntyped() any { return s.low }
+
+// SQSRedrivePolicy represents high-level SQS redrive policy configuration.
+type SQSRedrivePolicy struct {
+	DeadLetterQueue *SQSIdentifier                      `json:"deadLetterQueue,omitempty" yaml:"deadLetterQueue,omitempty"`
+	MaxReceiveCount int                                 `json:"maxReceiveCount,omitempty" yaml:"maxReceiveCount,omitempty"`
+	Extensions      *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
+	low             *lowasync.SQSRedrivePolicy
+}
+
+// NewSQSRedrivePolicy creates a new high-level SQSRedrivePolicy.
+func NewSQSRedrivePolicy(p *lowasync.SQSRedrivePolicy) *SQSRedrivePolicy {
+	s := new(SQSRedrivePolicy)
+	s.low = p
+	s.MaxReceiveCount = p.MaxReceiveCount.Value
+	if !p.DeadLetterQueue.IsEmpty() {
+		s.DeadLetterQueue = NewSQSIdentifier(p.DeadLetterQueue.Value)
+	}
+	if orderedmap.Len(p.Extensions) > 0 {
+		s.Extensions = high.ExtractExtensions(p.Extensions)
+	}
+	return s
+}
+
+// GoLow returns the low-level SQSRedrivePolicy.
+func (s *SQSRedrivePolicy) GoLow() *lowasync.SQSRedrivePolicy { return s.low }
+
+// GoLowUntyped returns the low-level SQSRedrivePolicy with no type.
+func (s *SQSRedrivePolicy) GoLowUntyped() any { return s.low }
+
+// SQSPolicy represents a high-level SQS queue policy.
+type SQSPolicy struct {
+	Statements []*SQSPolicyStatement               `json:"statements,omitempty" yaml:"statements,omitempty"`
+	Extensions *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
+	low        *lowasync.SQSPolicy
+}
+
+// NewSQSPolicy creates a new high-level SQSPolicy.
+func NewSQSPolicy(p *lowasync.SQSPolicy) *SQSPolicy {
+	s := new(SQSPolicy)
+	s.low = p
+	if p.Statements.Value != nil {
+		for _, statement := range p.Statements.Value {
+			s.Statements = append(s.Statements, NewSQSPolicyStatement(statement.Value))
+		}
+	}
+	if orderedmap.Len(p.Extensions) > 0 {
+		s.Extensions = high.ExtractExtensions(p.Extensions)
+	}
+	return s
+}
+
+// GoLow returns the low-level SQSPolicy.
+func (s *SQSPolicy) GoLow() *lowasync.SQSPolicy { return s.low }
+
+// GoLowUntyped returns the low-level SQSPolicy with no type.
+func (s *SQSPolicy) GoLowUntyped() any { return s.low }
+
+// SQSPolicyStatement represents a high-level SQS queue policy statement.
+type SQSPolicyStatement struct {
+	Effect     string                              `json:"effect,omitempty" yaml:"effect,omitempty"`
+	Principal  *yaml.Node                          `json:"principal,omitempty" yaml:"principal,omitempty"`
+	Action     *yaml.Node                          `json:"action,omitempty" yaml:"action,omitempty"`
+	Resource   *yaml.Node                          `json:"resource,omitempty" yaml:"resource,omitempty"`
+	Condition  *yaml.Node                          `json:"condition,omitempty" yaml:"condition,omitempty"`
+	Extensions *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
+	low        *lowasync.SQSPolicyStatement
+}
+
+// NewSQSPolicyStatement creates a new high-level SQSPolicyStatement.
+func NewSQSPolicyStatement(p *lowasync.SQSPolicyStatement) *SQSPolicyStatement {
+	s := new(SQSPolicyStatement)
+	s.low = p
+	s.Effect = p.Effect.Value
+	s.Principal = p.Principal.Value
+	s.Action = p.Action.Value
+	s.Resource = p.Resource.Value
+	s.Condition = p.Condition.Value
+	if orderedmap.Len(p.Extensions) > 0 {
+		s.Extensions = high.ExtractExtensions(p.Extensions)
+	}
+	return s
+}
+
+// GoLow returns the low-level SQSPolicyStatement.
+func (s *SQSPolicyStatement) GoLow() *lowasync.SQSPolicyStatement { return s.low }
+
+// GoLowUntyped returns the low-level SQSPolicyStatement with no type.
+func (s *SQSPolicyStatement) GoLowUntyped() any { return s.low }
+
+func yamlStringMap(node *yaml.Node) map[string]string {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+	values := make(map[string]string)
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		key := node.Content[i]
+		value := node.Content[i+1]
+		if key.Kind == yaml.ScalarNode && value.Kind == yaml.ScalarNode {
+			values[key.Value] = value.Value
+		}
+	}
+	if len(values) == 0 {
+		return nil
+	}
+	return values
+}
 
 // Kafka Server Binding
 

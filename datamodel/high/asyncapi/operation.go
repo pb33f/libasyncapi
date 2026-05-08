@@ -4,9 +4,9 @@
 package asyncapi
 
 import (
+	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/high"
 	"github.com/pb33f/libopenapi/datamodel/low"
-	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/orderedmap"
 	"go.yaml.in/yaml/v4"
 )
@@ -17,19 +17,19 @@ import (
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#operationObject
 type Operation struct {
-	Action       string                               `json:"action,omitempty" yaml:"action,omitempty"`
-	Channel      *low.Reference                       `json:"channel,omitempty" yaml:"channel,omitempty"`
-	Title        string                               `json:"title,omitempty" yaml:"title,omitempty"`
-	Summary      string                               `json:"summary,omitempty" yaml:"summary,omitempty"`
-	Description  string                               `json:"description,omitempty" yaml:"description,omitempty"`
-	Messages     []*low.Reference                     `json:"messages,omitempty" yaml:"messages,omitempty"`
-	Reply        *OperationReply                      `json:"reply,omitempty" yaml:"reply,omitempty"`
-	Tags         []*Tag                               `json:"tags,omitempty" yaml:"tags,omitempty"`
-	ExternalDocs *ExternalDoc                         `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
-	Bindings     *OperationBindings                   `json:"bindings,omitempty" yaml:"bindings,omitempty"`
-	Traits       []*OperationTrait                    `json:"traits,omitempty" yaml:"traits,omitempty"`
-	Security     []*SecurityScheme                    `json:"security,omitempty" yaml:"security,omitempty"`
-	Extensions   *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	Action       string                              `json:"action,omitempty" yaml:"action,omitempty"`
+	Channel      *low.Reference                      `json:"channel,omitempty" yaml:"channel,omitempty"`
+	Title        string                              `json:"title,omitempty" yaml:"title,omitempty"`
+	Summary      string                              `json:"summary,omitempty" yaml:"summary,omitempty"`
+	Description  string                              `json:"description,omitempty" yaml:"description,omitempty"`
+	Messages     []*low.Reference                    `json:"messages,omitempty" yaml:"messages,omitempty"`
+	Reply        *OperationReply                     `json:"reply,omitempty" yaml:"reply,omitempty"`
+	Tags         []*Tag                              `json:"tags,omitempty" yaml:"tags,omitempty"`
+	ExternalDocs *ExternalDoc                        `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
+	Bindings     *OperationBindings                  `json:"bindings,omitempty" yaml:"bindings,omitempty"`
+	Traits       []*OperationTrait                   `json:"traits,omitempty" yaml:"traits,omitempty"`
+	Security     []*SecurityScheme                   `json:"security,omitempty" yaml:"security,omitempty"`
+	Extensions   *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low          *lowasync.Operation
 }
 
@@ -103,11 +103,12 @@ func (o *Operation) MarshalYAML() (interface{}, error) {
 
 // OperationBindings represents a high-level AsyncAPI 3.0 Operation Bindings object.
 type OperationBindings struct {
-	HTTP       *HTTPOperationBinding                `json:"http,omitempty" yaml:"http,omitempty"`
-	Kafka      *KafkaOperationBinding               `json:"kafka,omitempty" yaml:"kafka,omitempty"`
-	AMQP       *AMQPOperationBinding                `json:"amqp,omitempty" yaml:"amqp,omitempty"`
-	MQTT       *MQTTOperationBinding                `json:"mqtt,omitempty" yaml:"mqtt,omitempty"`
-	Extensions *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	HTTP       *HTTPOperationBinding               `json:"http,omitempty" yaml:"http,omitempty"`
+	Kafka      *KafkaOperationBinding              `json:"kafka,omitempty" yaml:"kafka,omitempty"`
+	AMQP       *AMQPOperationBinding               `json:"amqp,omitempty" yaml:"amqp,omitempty"`
+	MQTT       *MQTTOperationBinding               `json:"mqtt,omitempty" yaml:"mqtt,omitempty"`
+	SQS        *SQSOperationBinding                `json:"sqs,omitempty" yaml:"sqs,omitempty"`
+	Extensions *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low        *lowasync.OperationBindings
 }
 
@@ -126,6 +127,9 @@ func NewOperationBindings(ob *lowasync.OperationBindings) *OperationBindings {
 	}
 	if !ob.MQTT.IsEmpty() {
 		b.MQTT = NewMQTTOperationBinding(ob.MQTT.Value)
+	}
+	if !ob.SQS.IsEmpty() {
+		b.SQS = NewSQSOperationBinding(ob.SQS.Value)
 	}
 	if orderedmap.Len(ob.Extensions) > 0 {
 		b.Extensions = high.ExtractExtensions(ob.Extensions)
@@ -147,14 +151,14 @@ func (b *OperationBindings) GoLowUntyped() any {
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#operationTraitObject
 type OperationTrait struct {
-	Title        string                               `json:"title,omitempty" yaml:"title,omitempty"`
-	Summary      string                               `json:"summary,omitempty" yaml:"summary,omitempty"`
-	Description  string                               `json:"description,omitempty" yaml:"description,omitempty"`
-	Security     []*SecurityScheme                    `json:"security,omitempty" yaml:"security,omitempty"`
-	Tags         []*Tag                               `json:"tags,omitempty" yaml:"tags,omitempty"`
-	ExternalDocs *ExternalDoc                         `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
-	Bindings     *OperationBindings                   `json:"bindings,omitempty" yaml:"bindings,omitempty"`
-	Extensions   *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	Title        string                              `json:"title,omitempty" yaml:"title,omitempty"`
+	Summary      string                              `json:"summary,omitempty" yaml:"summary,omitempty"`
+	Description  string                              `json:"description,omitempty" yaml:"description,omitempty"`
+	Security     []*SecurityScheme                   `json:"security,omitempty" yaml:"security,omitempty"`
+	Tags         []*Tag                              `json:"tags,omitempty" yaml:"tags,omitempty"`
+	ExternalDocs *ExternalDoc                        `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
+	Bindings     *OperationBindings                  `json:"bindings,omitempty" yaml:"bindings,omitempty"`
+	Extensions   *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low          *lowasync.OperationTrait
 }
 
@@ -201,10 +205,10 @@ func (t *OperationTrait) GoLowUntyped() any {
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#operationReplyObject
 type OperationReply struct {
-	Address    *OperationReplyAddress               `json:"address,omitempty" yaml:"address,omitempty"`
-	Channel    *low.Reference                       `json:"channel,omitempty" yaml:"channel,omitempty"`
-	Messages   []*low.Reference                     `json:"messages,omitempty" yaml:"messages,omitempty"`
-	Extensions *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	Address    *OperationReplyAddress              `json:"address,omitempty" yaml:"address,omitempty"`
+	Channel    *low.Reference                      `json:"channel,omitempty" yaml:"channel,omitempty"`
+	Messages   []*low.Reference                    `json:"messages,omitempty" yaml:"messages,omitempty"`
+	Extensions *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low        *lowasync.OperationReply
 }
 
@@ -243,10 +247,10 @@ func (r *OperationReply) GoLowUntyped() any {
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#operationReplyAddressObject
 type OperationReplyAddress struct {
-	Location   string                               `json:"location,omitempty" yaml:"location,omitempty"`
+	Location    string                              `json:"location,omitempty" yaml:"location,omitempty"`
 	Description string                              `json:"description,omitempty" yaml:"description,omitempty"`
-	Extensions *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
-	low        *lowasync.OperationReplyAddress
+	Extensions  *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
+	low         *lowasync.OperationReplyAddress
 }
 
 // NewOperationReplyAddress creates a new high-level OperationReplyAddress instance from a low-level one.

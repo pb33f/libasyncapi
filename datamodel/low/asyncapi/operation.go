@@ -280,6 +280,7 @@ type OperationBindings struct {
 	Kafka      low.NodeReference[*KafkaOperationBinding]
 	AMQP       low.NodeReference[*AMQPOperationBinding]
 	MQTT       low.NodeReference[*MQTTOperationBinding]
+	SQS        low.NodeReference[*SQSOperationBinding]
 	Extensions *orderedmap.Map[low.KeyReference[string], low.ValueReference[*yaml.Node]]
 	KeyNode    *yaml.Node
 	RootNode   *yaml.Node
@@ -338,6 +339,9 @@ func (ob *OperationBindings) Build(ctx context.Context, keyNode, root *yaml.Node
 	mqtt, _ := low.ExtractObject[*MQTTOperationBinding](ctx, MQTTLabel, root, idx)
 	ob.MQTT = mqtt
 
+	sqs, _ := low.ExtractObject[*SQSOperationBinding](ctx, SQSLabel, root, idx)
+	ob.SQS = sqs
+
 	return nil
 }
 
@@ -359,6 +363,10 @@ func (ob *OperationBindings) Hash() [32]byte {
 	}
 	if !ob.MQTT.IsEmpty() {
 		sb.WriteString(low.GenerateHashString(ob.MQTT.Value))
+		sb.WriteByte('|')
+	}
+	if !ob.SQS.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(ob.SQS.Value))
 		sb.WriteByte('|')
 	}
 	for _, ext := range low.HashExtensions(ob.Extensions) {
@@ -486,7 +494,7 @@ func (ot *OperationTrait) Hash() [32]byte {
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#operationReplyObject
 type OperationReply struct {
 	Address    low.NodeReference[*OperationReplyAddress]
-	Channel    low.NodeReference[*low.Reference] // reference only
+	Channel    low.NodeReference[*low.Reference]                       // reference only
 	Messages   low.NodeReference[[]low.ValueReference[*low.Reference]] // array of refs
 	Extensions *orderedmap.Map[low.KeyReference[string], low.ValueReference[*yaml.Node]]
 	KeyNode    *yaml.Node

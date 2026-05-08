@@ -4,9 +4,9 @@
 package asyncapi
 
 import (
+	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/high"
 	highbase "github.com/pb33f/libopenapi/datamodel/high/base"
-	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/orderedmap"
 	"go.yaml.in/yaml/v4"
 )
@@ -17,20 +17,20 @@ import (
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#messageObject
 type Message struct {
-	Headers       *highbase.SchemaProxy                `json:"headers,omitempty" yaml:"headers,omitempty"`
-	Payload       *highbase.SchemaProxy                `json:"payload,omitempty" yaml:"payload,omitempty"`
-	CorrelationID *CorrelationID                       `json:"correlationId,omitempty" yaml:"correlationId,omitempty"`
-	ContentType   string                               `json:"contentType,omitempty" yaml:"contentType,omitempty"`
-	Name          string                               `json:"name,omitempty" yaml:"name,omitempty"`
-	Title         string                               `json:"title,omitempty" yaml:"title,omitempty"`
-	Summary       string                               `json:"summary,omitempty" yaml:"summary,omitempty"`
-	Description   string                               `json:"description,omitempty" yaml:"description,omitempty"`
-	Tags          []*Tag                               `json:"tags,omitempty" yaml:"tags,omitempty"`
-	ExternalDocs  *ExternalDoc                         `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
-	Bindings      *MessageBindings                     `json:"bindings,omitempty" yaml:"bindings,omitempty"`
-	Examples      []*MessageExample                    `json:"examples,omitempty" yaml:"examples,omitempty"`
-	Traits        []*MessageTrait                      `json:"traits,omitempty" yaml:"traits,omitempty"`
-	Extensions    *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	Headers       *highbase.SchemaProxy               `json:"headers,omitempty" yaml:"headers,omitempty"`
+	Payload       *highbase.SchemaProxy               `json:"payload,omitempty" yaml:"payload,omitempty"`
+	CorrelationID *CorrelationID                      `json:"correlationId,omitempty" yaml:"correlationId,omitempty"`
+	ContentType   string                              `json:"contentType,omitempty" yaml:"contentType,omitempty"`
+	Name          string                              `json:"name,omitempty" yaml:"name,omitempty"`
+	Title         string                              `json:"title,omitempty" yaml:"title,omitempty"`
+	Summary       string                              `json:"summary,omitempty" yaml:"summary,omitempty"`
+	Description   string                              `json:"description,omitempty" yaml:"description,omitempty"`
+	Tags          []*Tag                              `json:"tags,omitempty" yaml:"tags,omitempty"`
+	ExternalDocs  *ExternalDoc                        `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
+	Bindings      *MessageBindings                    `json:"bindings,omitempty" yaml:"bindings,omitempty"`
+	Examples      []*MessageExample                   `json:"examples,omitempty" yaml:"examples,omitempty"`
+	Traits        []*MessageTrait                     `json:"traits,omitempty" yaml:"traits,omitempty"`
+	Extensions    *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low           *lowasync.Message
 }
 
@@ -103,11 +103,12 @@ func (m *Message) MarshalYAML() (interface{}, error) {
 
 // MessageBindings represents a high-level AsyncAPI 3.0 Message Bindings object.
 type MessageBindings struct {
-	HTTP       *HTTPMessageBinding                  `json:"http,omitempty" yaml:"http,omitempty"`
-	Kafka      *KafkaMessageBinding                 `json:"kafka,omitempty" yaml:"kafka,omitempty"`
-	AMQP       *AMQPMessageBinding                  `json:"amqp,omitempty" yaml:"amqp,omitempty"`
-	MQTT       *MQTTMessageBinding                  `json:"mqtt,omitempty" yaml:"mqtt,omitempty"`
-	Extensions *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	HTTP       *HTTPMessageBinding                 `json:"http,omitempty" yaml:"http,omitempty"`
+	Kafka      *KafkaMessageBinding                `json:"kafka,omitempty" yaml:"kafka,omitempty"`
+	AMQP       *AMQPMessageBinding                 `json:"amqp,omitempty" yaml:"amqp,omitempty"`
+	MQTT       *MQTTMessageBinding                 `json:"mqtt,omitempty" yaml:"mqtt,omitempty"`
+	SQS        *SQSMessageBinding                  `json:"sqs,omitempty" yaml:"sqs,omitempty"`
+	Extensions *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low        *lowasync.MessageBindings
 }
 
@@ -126,6 +127,9 @@ func NewMessageBindings(mb *lowasync.MessageBindings) *MessageBindings {
 	}
 	if !mb.MQTT.IsEmpty() {
 		b.MQTT = NewMQTTMessageBinding(mb.MQTT.Value)
+	}
+	if !mb.SQS.IsEmpty() {
+		b.SQS = NewSQSMessageBinding(mb.SQS.Value)
 	}
 	if orderedmap.Len(mb.Extensions) > 0 {
 		b.Extensions = high.ExtractExtensions(mb.Extensions)
@@ -147,11 +151,11 @@ func (b *MessageBindings) GoLowUntyped() any {
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#messageExampleObject
 type MessageExample struct {
-	Headers    *yaml.Node                           `json:"headers,omitempty" yaml:"headers,omitempty"`
-	Payload    *yaml.Node                           `json:"payload,omitempty" yaml:"payload,omitempty"`
-	Name       string                               `json:"name,omitempty" yaml:"name,omitempty"`
-	Summary    string                               `json:"summary,omitempty" yaml:"summary,omitempty"`
-	Extensions *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	Headers    *yaml.Node                          `json:"headers,omitempty" yaml:"headers,omitempty"`
+	Payload    *yaml.Node                          `json:"payload,omitempty" yaml:"payload,omitempty"`
+	Name       string                              `json:"name,omitempty" yaml:"name,omitempty"`
+	Summary    string                              `json:"summary,omitempty" yaml:"summary,omitempty"`
+	Extensions *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low        *lowasync.MessageExample
 }
 
@@ -183,18 +187,18 @@ func (e *MessageExample) GoLowUntyped() any {
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#messageTraitObject
 type MessageTrait struct {
-	Headers       *highbase.SchemaProxy                `json:"headers,omitempty" yaml:"headers,omitempty"`
-	CorrelationID *CorrelationID                       `json:"correlationId,omitempty" yaml:"correlationId,omitempty"`
-	ContentType   string                               `json:"contentType,omitempty" yaml:"contentType,omitempty"`
-	Name          string                               `json:"name,omitempty" yaml:"name,omitempty"`
-	Title         string                               `json:"title,omitempty" yaml:"title,omitempty"`
-	Summary       string                               `json:"summary,omitempty" yaml:"summary,omitempty"`
-	Description   string                               `json:"description,omitempty" yaml:"description,omitempty"`
-	Tags          []*Tag                               `json:"tags,omitempty" yaml:"tags,omitempty"`
-	ExternalDocs  *ExternalDoc                         `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
-	Bindings      *MessageBindings                     `json:"bindings,omitempty" yaml:"bindings,omitempty"`
-	Examples      []*MessageExample                    `json:"examples,omitempty" yaml:"examples,omitempty"`
-	Extensions    *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	Headers       *highbase.SchemaProxy               `json:"headers,omitempty" yaml:"headers,omitempty"`
+	CorrelationID *CorrelationID                      `json:"correlationId,omitempty" yaml:"correlationId,omitempty"`
+	ContentType   string                              `json:"contentType,omitempty" yaml:"contentType,omitempty"`
+	Name          string                              `json:"name,omitempty" yaml:"name,omitempty"`
+	Title         string                              `json:"title,omitempty" yaml:"title,omitempty"`
+	Summary       string                              `json:"summary,omitempty" yaml:"summary,omitempty"`
+	Description   string                              `json:"description,omitempty" yaml:"description,omitempty"`
+	Tags          []*Tag                              `json:"tags,omitempty" yaml:"tags,omitempty"`
+	ExternalDocs  *ExternalDoc                        `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
+	Bindings      *MessageBindings                    `json:"bindings,omitempty" yaml:"bindings,omitempty"`
+	Examples      []*MessageExample                   `json:"examples,omitempty" yaml:"examples,omitempty"`
+	Extensions    *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low           *lowasync.MessageTrait
 }
 
@@ -250,9 +254,9 @@ func (t *MessageTrait) GoLowUntyped() any {
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#correlationIdObject
 type CorrelationID struct {
-	Description string                               `json:"description,omitempty" yaml:"description,omitempty"`
-	Location    string                               `json:"location,omitempty" yaml:"location,omitempty"`
-	Extensions  *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	Description string                              `json:"description,omitempty" yaml:"description,omitempty"`
+	Location    string                              `json:"location,omitempty" yaml:"location,omitempty"`
+	Extensions  *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low         *lowasync.CorrelationID
 }
 

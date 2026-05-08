@@ -287,6 +287,7 @@ type ServerBindings struct {
 	HTTP       low.NodeReference[*HTTPServerBinding]
 	Kafka      low.NodeReference[*KafkaServerBinding]
 	MQTT       low.NodeReference[*MQTTServerBinding]
+	SQS        low.NodeReference[*SQSServerBinding]
 	Extensions *orderedmap.Map[low.KeyReference[string], low.ValueReference[*yaml.Node]]
 	KeyNode    *yaml.Node
 	RootNode   *yaml.Node
@@ -342,6 +343,9 @@ func (sb *ServerBindings) Build(ctx context.Context, keyNode, root *yaml.Node, i
 	mqtt, _ := low.ExtractObject[*MQTTServerBinding](ctx, MQTTLabel, root, idx)
 	sb.MQTT = mqtt
 
+	sqs, _ := low.ExtractObject[*SQSServerBinding](ctx, SQSLabel, root, idx)
+	sb.SQS = sqs
+
 	return nil
 }
 
@@ -361,10 +365,13 @@ func (sb *ServerBindings) Hash() [32]byte {
 		sb2.WriteString(low.GenerateHashString(sb.MQTT.Value))
 		sb2.WriteByte('|')
 	}
+	if !sb.SQS.IsEmpty() {
+		sb2.WriteString(low.GenerateHashString(sb.SQS.Value))
+		sb2.WriteByte('|')
+	}
 	for _, ext := range low.HashExtensions(sb.Extensions) {
 		sb2.WriteString(ext)
 		sb2.WriteByte('|')
 	}
 	return sha256.Sum256([]byte(sb2.String()))
 }
-

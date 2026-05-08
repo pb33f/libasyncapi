@@ -227,6 +227,7 @@ type MessageBindings struct {
 	Kafka      low.NodeReference[*KafkaMessageBinding]
 	AMQP       low.NodeReference[*AMQPMessageBinding]
 	MQTT       low.NodeReference[*MQTTMessageBinding]
+	SQS        low.NodeReference[*SQSMessageBinding]
 	Extensions *orderedmap.Map[low.KeyReference[string], low.ValueReference[*yaml.Node]]
 	KeyNode    *yaml.Node
 	RootNode   *yaml.Node
@@ -285,6 +286,9 @@ func (mb *MessageBindings) Build(ctx context.Context, keyNode, root *yaml.Node, 
 	mqtt, _ := low.ExtractObject[*MQTTMessageBinding](ctx, MQTTLabel, root, idx)
 	mb.MQTT = mqtt
 
+	sqs, _ := low.ExtractObject[*SQSMessageBinding](ctx, SQSLabel, root, idx)
+	mb.SQS = sqs
+
 	return nil
 }
 
@@ -306,6 +310,10 @@ func (mb *MessageBindings) Hash() [32]byte {
 	}
 	if !mb.MQTT.IsEmpty() {
 		sb.WriteString(low.GenerateHashString(mb.MQTT.Value))
+		sb.WriteByte('|')
+	}
+	if !mb.SQS.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(mb.SQS.Value))
 		sb.WriteByte('|')
 	}
 	for _, ext := range low.HashExtensions(mb.Extensions) {

@@ -242,6 +242,7 @@ type ChannelBindings struct {
 	WebSocket  low.NodeReference[*WebSocketChannelBinding]
 	Kafka      low.NodeReference[*KafkaChannelBinding]
 	AMQP       low.NodeReference[*AMQPChannelBinding]
+	SQS        low.NodeReference[*SQSChannelBinding]
 	Extensions *orderedmap.Map[low.KeyReference[string], low.ValueReference[*yaml.Node]]
 	KeyNode    *yaml.Node
 	RootNode   *yaml.Node
@@ -300,6 +301,9 @@ func (cb *ChannelBindings) Build(ctx context.Context, keyNode, root *yaml.Node, 
 	amqp, _ := low.ExtractObject[*AMQPChannelBinding](ctx, AMQPLabel, root, idx)
 	cb.AMQP = amqp
 
+	sqs, _ := low.ExtractObject[*SQSChannelBinding](ctx, SQSLabel, root, idx)
+	cb.SQS = sqs
+
 	return nil
 }
 
@@ -321,6 +325,10 @@ func (cb *ChannelBindings) Hash() [32]byte {
 	}
 	if !cb.AMQP.IsEmpty() {
 		sb.WriteString(low.GenerateHashString(cb.AMQP.Value))
+		sb.WriteByte('|')
+	}
+	if !cb.SQS.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(cb.SQS.Value))
 		sb.WriteByte('|')
 	}
 	for _, ext := range low.HashExtensions(cb.Extensions) {

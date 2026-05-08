@@ -4,9 +4,9 @@
 package asyncapi
 
 import (
+	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/high"
 	"github.com/pb33f/libopenapi/datamodel/low"
-	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/orderedmap"
 	"go.yaml.in/yaml/v4"
 )
@@ -96,11 +96,11 @@ func (s *Server) MarshalYAML() (interface{}, error) {
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#serverVariableObject
 type ServerVariable struct {
-	Enum        []string                              `json:"enum,omitempty" yaml:"enum,omitempty"`
-	Default     string                                `json:"default,omitempty" yaml:"default,omitempty"`
-	Description string                                `json:"description,omitempty" yaml:"description,omitempty"`
-	Examples    []string                              `json:"examples,omitempty" yaml:"examples,omitempty"`
-	Extensions  *orderedmap.Map[string, *yaml.Node]   `json:"-" yaml:"-"`
+	Enum        []string                            `json:"enum,omitempty" yaml:"enum,omitempty"`
+	Default     string                              `json:"default,omitempty" yaml:"default,omitempty"`
+	Description string                              `json:"description,omitempty" yaml:"description,omitempty"`
+	Examples    []string                            `json:"examples,omitempty" yaml:"examples,omitempty"`
+	Extensions  *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low         *lowasync.ServerVariable
 }
 
@@ -149,10 +149,11 @@ func (v *ServerVariable) MarshalYAML() (interface{}, error) {
 
 // ServerBindings represents a high-level AsyncAPI 3.0 Server Bindings object.
 type ServerBindings struct {
-	HTTP       *HTTPServerBinding                   `json:"http,omitempty" yaml:"http,omitempty"`
-	Kafka      *KafkaServerBinding                  `json:"kafka,omitempty" yaml:"kafka,omitempty"`
-	MQTT       *MQTTServerBinding                   `json:"mqtt,omitempty" yaml:"mqtt,omitempty"`
-	Extensions *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	HTTP       *HTTPServerBinding                  `json:"http,omitempty" yaml:"http,omitempty"`
+	Kafka      *KafkaServerBinding                 `json:"kafka,omitempty" yaml:"kafka,omitempty"`
+	MQTT       *MQTTServerBinding                  `json:"mqtt,omitempty" yaml:"mqtt,omitempty"`
+	SQS        *SQSServerBinding                   `json:"sqs,omitempty" yaml:"sqs,omitempty"`
+	Extensions *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low        *lowasync.ServerBindings
 }
 
@@ -168,6 +169,9 @@ func NewServerBindings(sb *lowasync.ServerBindings) *ServerBindings {
 	}
 	if !sb.MQTT.IsEmpty() {
 		b.MQTT = NewMQTTServerBinding(sb.MQTT.Value)
+	}
+	if !sb.SQS.IsEmpty() {
+		b.SQS = NewSQSServerBinding(sb.SQS.Value)
 	}
 	if orderedmap.Len(sb.Extensions) > 0 {
 		b.Extensions = high.ExtractExtensions(sb.Extensions)

@@ -39,6 +39,13 @@ servers:
       http:
         x-http-server-ext: value
 
+  sqs-server:
+    host: sqs.us-east-1.amazonaws.com
+    protocol: sqs
+    bindings:
+      sqs:
+        x-server-binding-ext: value
+
 channels:
   kafka-channel:
     address: events/kafka/{eventId}
@@ -115,6 +122,65 @@ channels:
       http:
         x-http-channel-ext: value
 
+  sqs-channel:
+    address: findings-worker
+    messages:
+      sqsMessage:
+        $ref: '#/components/messages/sqsMessage'
+    bindings:
+      sqs:
+        queue:
+          name: findings-worker
+          fifoQueue: false
+          visibilityTimeout: 60
+          receiveMessageWaitTime: 20
+          messageRetentionPeriod: 345600
+          redrivePolicy:
+            deadLetterQueue:
+              name: findings-worker-dlq
+            maxReceiveCount: 5
+          policy:
+            statements:
+              - effect: Allow
+                Principal:
+                  Service: events.amazonaws.com
+                Action:
+                  - sqs:SendMessage
+                Resource: arn:aws:sqs:us-east-1:123456789012:findings-worker
+                Condition:
+                  ArnEquals:
+                    aws:SourceArn: arn:aws:events:us-east-1:123456789012:rule/linus/findings-created-to-worker
+          tags:
+            owner: linus
+            service: findings
+        deadLetterQueue:
+          name: findings-worker-dlq
+          fifoQueue: false
+          messageRetentionPeriod: 1209600
+        bindingVersion: 0.3.0
+        x-sqs-channel-ext: value
+
+  sqs-fifo-channel:
+    address: audit-events.fifo
+    messages:
+      sqsMessage:
+        $ref: '#/components/messages/sqsMessage'
+    bindings:
+      sqs:
+        queue:
+          name: audit-events.fifo
+          fifoQueue: true
+          deduplicationScope: messageGroup
+          fifoThroughputLimit: perMessageGroupId
+          deliveryDelay: 15
+          visibilityTimeout: 45
+          receiveMessageWaitTime: 10
+          messageRetentionPeriod: 86400
+          tags:
+            owner: linus
+            queue_kind: fifo
+        bindingVersion: 0.3.0
+
 operations:
   kafka-operation:
     action: receive
@@ -175,6 +241,19 @@ operations:
           properties:
             page:
               type: integer
+        bindingVersion: 0.3.0
+
+  sqs-operation:
+    action: receive
+    channel:
+      $ref: '#/channels/sqs-channel'
+    bindings:
+      sqs:
+        queues:
+          - name: findings-worker
+            fifoQueue: false
+          - name: findings-worker-dlq
+            fifoQueue: false
         bindingVersion: 0.3.0
 
 components:
@@ -246,6 +325,18 @@ components:
                 type: string
           statusCode: 200
           bindingVersion: 0.3.0
+
+    sqsMessage:
+      name: sqsMessage
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          data:
+            type: string
+      bindings:
+        sqs:
+          x-sqs-message-ext: value
 
     wsMessage:
       name: wsMessage

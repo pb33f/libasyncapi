@@ -177,6 +177,371 @@ func (h *HTTPMessageBinding) Hash() [32]byte {
 	return sha256.Sum256([]byte(sb.String()))
 }
 
+// SQS Bindings
+
+// SQSServerBinding represents a low-level AsyncAPI SQS Server Binding object.
+type SQSServerBinding struct {
+	BaseBinding
+}
+
+func (s *SQSServerBinding) Build(ctx context.Context, keyNode, root *yaml.Node, idx *index.SpecIndex) error {
+	s.initBuild(ctx, keyNode, root, idx)
+	return nil
+}
+
+func (s *SQSServerBinding) Hash() [32]byte {
+	sb := low.GetStringBuilder()
+	defer low.PutStringBuilder(sb)
+	s.hashExtensions(sb)
+	return sha256.Sum256([]byte(sb.String()))
+}
+
+// SQSChannelBinding represents a low-level AsyncAPI SQS Channel Binding object.
+type SQSChannelBinding struct {
+	BaseBinding
+	Queue           low.NodeReference[*SQSQueue]
+	DeadLetterQueue low.NodeReference[*SQSQueue]
+	BindingVersion  low.NodeReference[string]
+}
+
+func (s *SQSChannelBinding) Build(ctx context.Context, keyNode, root *yaml.Node, idx *index.SpecIndex) error {
+	root = s.initBuild(ctx, keyNode, root, idx)
+
+	queue, _ := low.ExtractObject[*SQSQueue](ctx, QueueLabel, root, idx)
+	s.Queue = queue
+
+	deadLetterQueue, _ := low.ExtractObject[*SQSQueue](ctx, DeadLetterQueueLabel, root, idx)
+	s.DeadLetterQueue = deadLetterQueue
+
+	return nil
+}
+
+func (s *SQSChannelBinding) Hash() [32]byte {
+	sb := low.GetStringBuilder()
+	defer low.PutStringBuilder(sb)
+	if !s.Queue.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(s.Queue.Value))
+		sb.WriteByte('|')
+	}
+	if !s.DeadLetterQueue.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(s.DeadLetterQueue.Value))
+		sb.WriteByte('|')
+	}
+	if !s.BindingVersion.IsEmpty() {
+		sb.WriteString(s.BindingVersion.Value)
+		sb.WriteByte('|')
+	}
+	s.hashExtensions(sb)
+	return sha256.Sum256([]byte(sb.String()))
+}
+
+// SQSOperationBinding represents a low-level AsyncAPI SQS Operation Binding object.
+type SQSOperationBinding struct {
+	BaseBinding
+	Queues         low.NodeReference[[]low.ValueReference[*SQSIdentifier]]
+	BindingVersion low.NodeReference[string]
+}
+
+func (s *SQSOperationBinding) Build(ctx context.Context, keyNode, root *yaml.Node, idx *index.SpecIndex) error {
+	root = s.initBuild(ctx, keyNode, root, idx)
+
+	queues, qLabel, qValue, err := low.ExtractArray[*SQSIdentifier](ctx, QueuesLabel, root, idx)
+	if err != nil {
+		return err
+	}
+	if queues != nil {
+		s.Queues = low.NodeReference[[]low.ValueReference[*SQSIdentifier]]{
+			Value:     queues,
+			KeyNode:   qLabel,
+			ValueNode: qValue,
+		}
+	}
+
+	return nil
+}
+
+func (s *SQSOperationBinding) Hash() [32]byte {
+	sb := low.GetStringBuilder()
+	defer low.PutStringBuilder(sb)
+	if s.Queues.Value != nil {
+		for _, queue := range s.Queues.Value {
+			sb.WriteString(low.GenerateHashString(queue.Value))
+			sb.WriteByte('|')
+		}
+	}
+	if !s.BindingVersion.IsEmpty() {
+		sb.WriteString(s.BindingVersion.Value)
+		sb.WriteByte('|')
+	}
+	s.hashExtensions(sb)
+	return sha256.Sum256([]byte(sb.String()))
+}
+
+// SQSMessageBinding represents a low-level AsyncAPI SQS Message Binding object.
+type SQSMessageBinding struct {
+	BaseBinding
+}
+
+func (s *SQSMessageBinding) Build(ctx context.Context, keyNode, root *yaml.Node, idx *index.SpecIndex) error {
+	s.initBuild(ctx, keyNode, root, idx)
+	return nil
+}
+
+func (s *SQSMessageBinding) Hash() [32]byte {
+	sb := low.GetStringBuilder()
+	defer low.PutStringBuilder(sb)
+	s.hashExtensions(sb)
+	return sha256.Sum256([]byte(sb.String()))
+}
+
+// SQSQueue represents SQS queue configuration.
+type SQSQueue struct {
+	BaseBinding
+	Name                   low.NodeReference[string]
+	ARN                    low.NodeReference[string]
+	FifoQueue              low.NodeReference[bool]
+	DeduplicationScope     low.NodeReference[string]
+	FifoThroughputLimit    low.NodeReference[string]
+	DeliveryDelay          low.NodeReference[int]
+	VisibilityTimeout      low.NodeReference[int]
+	ReceiveMessageWaitTime low.NodeReference[int]
+	MessageRetentionPeriod low.NodeReference[int]
+	RedrivePolicy          low.NodeReference[*SQSRedrivePolicy]
+	Policy                 low.NodeReference[*SQSPolicy]
+	Tags                   low.NodeReference[*yaml.Node]
+}
+
+func (s *SQSQueue) Build(ctx context.Context, keyNode, root *yaml.Node, idx *index.SpecIndex) error {
+	root = s.initBuild(ctx, keyNode, root, idx)
+
+	redrivePolicy, _ := low.ExtractObject[*SQSRedrivePolicy](ctx, RedrivePolicyLabel, root, idx)
+	s.RedrivePolicy = redrivePolicy
+
+	policy, _ := low.ExtractObject[*SQSPolicy](ctx, PolicyLabel, root, idx)
+	s.Policy = policy
+
+	_, tagsLabel, tagsValue := utils.FindKeyNodeFullTop(TagsLabel, root.Content)
+	if tagsValue != nil {
+		s.Tags = low.NodeReference[*yaml.Node]{
+			Value:     tagsValue,
+			KeyNode:   tagsLabel,
+			ValueNode: tagsValue,
+		}
+	}
+
+	return nil
+}
+
+func (s *SQSQueue) Hash() [32]byte {
+	sb := low.GetStringBuilder()
+	defer low.PutStringBuilder(sb)
+	hashSQSIdentifierFields(sb, s.Name, s.ARN, s.FifoQueue)
+	if !s.DeduplicationScope.IsEmpty() {
+		sb.WriteString(s.DeduplicationScope.Value)
+		sb.WriteByte('|')
+	}
+	if !s.FifoThroughputLimit.IsEmpty() {
+		sb.WriteString(s.FifoThroughputLimit.Value)
+		sb.WriteByte('|')
+	}
+	if !s.DeliveryDelay.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(s.DeliveryDelay.Value))
+		sb.WriteByte('|')
+	}
+	if !s.VisibilityTimeout.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(s.VisibilityTimeout.Value))
+		sb.WriteByte('|')
+	}
+	if !s.ReceiveMessageWaitTime.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(s.ReceiveMessageWaitTime.Value))
+		sb.WriteByte('|')
+	}
+	if !s.MessageRetentionPeriod.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(s.MessageRetentionPeriod.Value))
+		sb.WriteByte('|')
+	}
+	if !s.RedrivePolicy.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(s.RedrivePolicy.Value))
+		sb.WriteByte('|')
+	}
+	if !s.Policy.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(s.Policy.Value))
+		sb.WriteByte('|')
+	}
+	if !s.Tags.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(s.Tags.Value))
+		sb.WriteByte('|')
+	}
+	s.hashExtensions(sb)
+	return sha256.Sum256([]byte(sb.String()))
+}
+
+// SQSIdentifier represents a named SQS queue reference.
+type SQSIdentifier struct {
+	BaseBinding
+	Name      low.NodeReference[string]
+	ARN       low.NodeReference[string]
+	FifoQueue low.NodeReference[bool]
+}
+
+func (s *SQSIdentifier) Build(ctx context.Context, keyNode, root *yaml.Node, idx *index.SpecIndex) error {
+	s.initBuild(ctx, keyNode, root, idx)
+	return nil
+}
+
+func (s *SQSIdentifier) Hash() [32]byte {
+	sb := low.GetStringBuilder()
+	defer low.PutStringBuilder(sb)
+	hashSQSIdentifierFields(sb, s.Name, s.ARN, s.FifoQueue)
+	s.hashExtensions(sb)
+	return sha256.Sum256([]byte(sb.String()))
+}
+
+// SQSRedrivePolicy represents SQS redrive policy configuration.
+type SQSRedrivePolicy struct {
+	BaseBinding
+	DeadLetterQueue low.NodeReference[*SQSIdentifier]
+	MaxReceiveCount low.NodeReference[int]
+}
+
+func (s *SQSRedrivePolicy) Build(ctx context.Context, keyNode, root *yaml.Node, idx *index.SpecIndex) error {
+	root = s.initBuild(ctx, keyNode, root, idx)
+
+	deadLetterQueue, _ := low.ExtractObject[*SQSIdentifier](ctx, DeadLetterQueueLabel, root, idx)
+	s.DeadLetterQueue = deadLetterQueue
+
+	return nil
+}
+
+func (s *SQSRedrivePolicy) Hash() [32]byte {
+	sb := low.GetStringBuilder()
+	defer low.PutStringBuilder(sb)
+	if !s.DeadLetterQueue.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(s.DeadLetterQueue.Value))
+		sb.WriteByte('|')
+	}
+	if !s.MaxReceiveCount.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(s.MaxReceiveCount.Value))
+		sb.WriteByte('|')
+	}
+	s.hashExtensions(sb)
+	return sha256.Sum256([]byte(sb.String()))
+}
+
+// SQSPolicy represents an SQS queue policy.
+type SQSPolicy struct {
+	BaseBinding
+	Statements low.NodeReference[[]low.ValueReference[*SQSPolicyStatement]]
+}
+
+func (s *SQSPolicy) Build(ctx context.Context, keyNode, root *yaml.Node, idx *index.SpecIndex) error {
+	root = s.initBuild(ctx, keyNode, root, idx)
+
+	statements, stLabel, stValue, err := low.ExtractArray[*SQSPolicyStatement](ctx, StatementsLabel, root, idx)
+	if err != nil {
+		return err
+	}
+	if statements != nil {
+		s.Statements = low.NodeReference[[]low.ValueReference[*SQSPolicyStatement]]{
+			Value:     statements,
+			KeyNode:   stLabel,
+			ValueNode: stValue,
+		}
+	}
+
+	return nil
+}
+
+func (s *SQSPolicy) Hash() [32]byte {
+	sb := low.GetStringBuilder()
+	defer low.PutStringBuilder(sb)
+	if s.Statements.Value != nil {
+		for _, statement := range s.Statements.Value {
+			sb.WriteString(low.GenerateHashString(statement.Value))
+			sb.WriteByte('|')
+		}
+	}
+	s.hashExtensions(sb)
+	return sha256.Sum256([]byte(sb.String()))
+}
+
+// SQSPolicyStatement represents an SQS queue policy statement.
+type SQSPolicyStatement struct {
+	BaseBinding
+	Effect    low.NodeReference[string]
+	Principal low.NodeReference[*yaml.Node]
+	Action    low.NodeReference[*yaml.Node]
+	Resource  low.NodeReference[*yaml.Node]
+	Condition low.NodeReference[*yaml.Node]
+}
+
+func (s *SQSPolicyStatement) Build(ctx context.Context, keyNode, root *yaml.Node, idx *index.SpecIndex) error {
+	root = s.initBuild(ctx, keyNode, root, idx)
+	s.Principal = extractRawNodeReference(PrincipalLabel, root)
+	s.Action = extractRawNodeReference(ActionLabel, root)
+	s.Resource = extractRawNodeReference(ResourceLabel, root)
+	s.Condition = extractRawNodeReference(ConditionLabel, root)
+	return nil
+}
+
+func (s *SQSPolicyStatement) Hash() [32]byte {
+	sb := low.GetStringBuilder()
+	defer low.PutStringBuilder(sb)
+	if !s.Effect.IsEmpty() {
+		sb.WriteString(s.Effect.Value)
+		sb.WriteByte('|')
+	}
+	hashRawNodeReference(sb, s.Principal)
+	hashRawNodeReference(sb, s.Action)
+	hashRawNodeReference(sb, s.Resource)
+	hashRawNodeReference(sb, s.Condition)
+	s.hashExtensions(sb)
+	return sha256.Sum256([]byte(sb.String()))
+}
+
+func extractRawNodeReference(label string, root *yaml.Node) low.NodeReference[*yaml.Node] {
+	var keyNode, valueNode *yaml.Node
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		key := root.Content[i]
+		value := root.Content[i+1]
+		if strings.EqualFold(key.Value, label) {
+			keyNode = key
+			valueNode = value
+			break
+		}
+	}
+	if valueNode == nil {
+		return low.NodeReference[*yaml.Node]{}
+	}
+	return low.NodeReference[*yaml.Node]{
+		Value:     valueNode,
+		KeyNode:   keyNode,
+		ValueNode: valueNode,
+	}
+}
+
+func hashRawNodeReference(sb *strings.Builder, ref low.NodeReference[*yaml.Node]) {
+	if !ref.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(ref.Value))
+		sb.WriteByte('|')
+	}
+}
+
+func hashSQSIdentifierFields(sb *strings.Builder, name low.NodeReference[string], arn low.NodeReference[string], fifoQueue low.NodeReference[bool]) {
+	if !name.IsEmpty() {
+		sb.WriteString(name.Value)
+		sb.WriteByte('|')
+	}
+	if !arn.IsEmpty() {
+		sb.WriteString(arn.Value)
+		sb.WriteByte('|')
+	}
+	if !fifoQueue.IsEmpty() {
+		sb.WriteString(low.GenerateHashString(fifoQueue.Value))
+		sb.WriteByte('|')
+	}
+}
+
 // Kafka Bindings
 
 // KafkaServerBinding represents a low-level AsyncAPI 3.0 Kafka Server Binding object.

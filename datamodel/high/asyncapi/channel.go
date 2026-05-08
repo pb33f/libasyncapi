@@ -4,9 +4,9 @@
 package asyncapi
 
 import (
+	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/high"
 	"github.com/pb33f/libopenapi/datamodel/low"
-	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/orderedmap"
 	"go.yaml.in/yaml/v4"
 )
@@ -17,17 +17,17 @@ import (
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#channelObject
 type Channel struct {
-	Address      *string                                `json:"address,omitempty" yaml:"address,omitempty"`
-	Messages     *orderedmap.Map[string, *Message]      `json:"messages,omitempty" yaml:"messages,omitempty"`
-	Title        string                                 `json:"title,omitempty" yaml:"title,omitempty"`
-	Summary      string                                 `json:"summary,omitempty" yaml:"summary,omitempty"`
-	Description  string                                 `json:"description,omitempty" yaml:"description,omitempty"`
-	Servers      []*low.Reference                       `json:"servers,omitempty" yaml:"servers,omitempty"`
-	Parameters   *orderedmap.Map[string, *Parameter]    `json:"parameters,omitempty" yaml:"parameters,omitempty"`
-	Tags         []*Tag                                 `json:"tags,omitempty" yaml:"tags,omitempty"`
-	ExternalDocs *ExternalDoc                           `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
-	Bindings     *ChannelBindings                       `json:"bindings,omitempty" yaml:"bindings,omitempty"`
-	Extensions   *orderedmap.Map[string, *yaml.Node]    `json:"-" yaml:"-"`
+	Address      *string                             `json:"address,omitempty" yaml:"address,omitempty"`
+	Messages     *orderedmap.Map[string, *Message]   `json:"messages,omitempty" yaml:"messages,omitempty"`
+	Title        string                              `json:"title,omitempty" yaml:"title,omitempty"`
+	Summary      string                              `json:"summary,omitempty" yaml:"summary,omitempty"`
+	Description  string                              `json:"description,omitempty" yaml:"description,omitempty"`
+	Servers      []*low.Reference                    `json:"servers,omitempty" yaml:"servers,omitempty"`
+	Parameters   *orderedmap.Map[string, *Parameter] `json:"parameters,omitempty" yaml:"parameters,omitempty"`
+	Tags         []*Tag                              `json:"tags,omitempty" yaml:"tags,omitempty"`
+	ExternalDocs *ExternalDoc                        `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
+	Bindings     *ChannelBindings                    `json:"bindings,omitempty" yaml:"bindings,omitempty"`
+	Extensions   *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low          *lowasync.Channel
 }
 
@@ -91,11 +91,12 @@ func (c *Channel) MarshalYAML() (interface{}, error) {
 
 // ChannelBindings represents a high-level AsyncAPI 3.0 Channel Bindings object.
 type ChannelBindings struct {
-	HTTP       *HTTPChannelBinding                  `json:"http,omitempty" yaml:"http,omitempty"`
-	WebSocket  *WebSocketChannelBinding             `json:"ws,omitempty" yaml:"ws,omitempty"`
-	Kafka      *KafkaChannelBinding                 `json:"kafka,omitempty" yaml:"kafka,omitempty"`
-	AMQP       *AMQPChannelBinding                  `json:"amqp,omitempty" yaml:"amqp,omitempty"`
-	Extensions *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	HTTP       *HTTPChannelBinding                 `json:"http,omitempty" yaml:"http,omitempty"`
+	WebSocket  *WebSocketChannelBinding            `json:"ws,omitempty" yaml:"ws,omitempty"`
+	Kafka      *KafkaChannelBinding                `json:"kafka,omitempty" yaml:"kafka,omitempty"`
+	AMQP       *AMQPChannelBinding                 `json:"amqp,omitempty" yaml:"amqp,omitempty"`
+	SQS        *SQSChannelBinding                  `json:"sqs,omitempty" yaml:"sqs,omitempty"`
+	Extensions *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low        *lowasync.ChannelBindings
 }
 
@@ -114,6 +115,9 @@ func NewChannelBindings(cb *lowasync.ChannelBindings) *ChannelBindings {
 	}
 	if !cb.AMQP.IsEmpty() {
 		b.AMQP = NewAMQPChannelBinding(cb.AMQP.Value)
+	}
+	if !cb.SQS.IsEmpty() {
+		b.SQS = NewSQSChannelBinding(cb.SQS.Value)
 	}
 	if orderedmap.Len(cb.Extensions) > 0 {
 		b.Extensions = high.ExtractExtensions(cb.Extensions)
@@ -135,12 +139,12 @@ func (b *ChannelBindings) GoLowUntyped() any {
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#parameterObject
 type Parameter struct {
-	Enum        []string                             `json:"enum,omitempty" yaml:"enum,omitempty"`
-	Default     string                               `json:"default,omitempty" yaml:"default,omitempty"`
-	Description string                               `json:"description,omitempty" yaml:"description,omitempty"`
-	Examples    []string                             `json:"examples,omitempty" yaml:"examples,omitempty"`
-	Location    string                               `json:"location,omitempty" yaml:"location,omitempty"`
-	Extensions  *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	Enum        []string                            `json:"enum,omitempty" yaml:"enum,omitempty"`
+	Default     string                              `json:"default,omitempty" yaml:"default,omitempty"`
+	Description string                              `json:"description,omitempty" yaml:"description,omitempty"`
+	Examples    []string                            `json:"examples,omitempty" yaml:"examples,omitempty"`
+	Location    string                              `json:"location,omitempty" yaml:"location,omitempty"`
+	Extensions  *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low         *lowasync.Parameter
 }
 
