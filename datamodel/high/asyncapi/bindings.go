@@ -185,7 +185,7 @@ func (s *SQSChannelBinding) GoLowUntyped() any { return s.low }
 
 // SQSOperationBinding represents a high-level SQS Operation Binding.
 type SQSOperationBinding struct {
-	Queues         []*SQSIdentifier                    `json:"queues,omitempty" yaml:"queues,omitempty"`
+	Queues         []*SQSQueue                         `json:"queues,omitempty" yaml:"queues,omitempty"`
 	BindingVersion string                              `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
 	Extensions     *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low            *lowasync.SQSOperationBinding
@@ -198,7 +198,7 @@ func NewSQSOperationBinding(b *lowasync.SQSOperationBinding) *SQSOperationBindin
 	s.BindingVersion = b.BindingVersion.Value
 	if b.Queues.Value != nil {
 		for _, queue := range b.Queues.Value {
-			s.Queues = append(s.Queues, NewSQSIdentifier(queue.Value))
+			s.Queues = append(s.Queues, NewSQSQueue(queue.Value))
 		}
 	}
 	if orderedmap.Len(b.Extensions) > 0 {

@@ -446,8 +446,21 @@ func TestComprehensiveBindings_SQSOperationBinding(t *testing.T) {
 	require.Len(t, sqs.Queues, 2)
 	assert.Equal(t, "findings-worker", sqs.Queues[0].Name)
 	assert.False(t, sqs.Queues[0].FifoQueue)
+	assert.Equal(t, 75, sqs.Queues[0].VisibilityTimeout)
+	assert.Equal(t, 12, sqs.Queues[0].ReceiveMessageWaitTime)
+	assert.Equal(t, 172800, sqs.Queues[0].MessageRetentionPeriod)
+	require.NotNil(t, sqs.Queues[0].RedrivePolicy)
+	require.NotNil(t, sqs.Queues[0].RedrivePolicy.DeadLetterQueue)
+	assert.Equal(t, "findings-worker-dlq", sqs.Queues[0].RedrivePolicy.DeadLetterQueue.Name)
+	assert.Equal(t, 7, sqs.Queues[0].RedrivePolicy.MaxReceiveCount)
+	require.NotNil(t, sqs.Queues[0].Policy)
+	require.Len(t, sqs.Queues[0].Policy.Statements, 1)
+	assert.Equal(t, "Allow", sqs.Queues[0].Policy.Statements[0].Effect)
+	require.NotNil(t, sqs.Queues[0].Tags)
+	assert.Equal(t, "receive", sqs.Queues[0].Tags["operation_scope"])
 	assert.Equal(t, "findings-worker-dlq", sqs.Queues[1].Name)
 	assert.False(t, sqs.Queues[1].FifoQueue)
+	assert.Equal(t, 1209600, sqs.Queues[1].MessageRetentionPeriod)
 }
 
 func TestComprehensiveBindings_SQSMessageBinding(t *testing.T) {

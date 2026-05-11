@@ -252,8 +252,27 @@ operations:
         queues:
           - name: findings-worker
             fifoQueue: false
+            visibilityTimeout: 75
+            receiveMessageWaitTime: 12
+            messageRetentionPeriod: 172800
+            redrivePolicy:
+              deadLetterQueue:
+                name: findings-worker-dlq
+                fifoQueue: false
+              maxReceiveCount: 7
+            policy:
+              statements:
+                - effect: Allow
+                  Principal:
+                    Service: events.amazonaws.com
+                  Action:
+                    - sqs:ReceiveMessage
+                  Resource: arn:aws:sqs:us-east-1:123456789012:findings-worker
+            tags:
+              operation_scope: receive
           - name: findings-worker-dlq
             fifoQueue: false
+            messageRetentionPeriod: 1209600
         bindingVersion: 0.3.0
 
 components:

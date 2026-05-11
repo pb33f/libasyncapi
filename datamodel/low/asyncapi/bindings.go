@@ -238,19 +238,19 @@ func (s *SQSChannelBinding) Hash() [32]byte {
 // SQSOperationBinding represents a low-level AsyncAPI SQS Operation Binding object.
 type SQSOperationBinding struct {
 	BaseBinding
-	Queues         low.NodeReference[[]low.ValueReference[*SQSIdentifier]]
+	Queues         low.NodeReference[[]low.ValueReference[*SQSQueue]]
 	BindingVersion low.NodeReference[string]
 }
 
 func (s *SQSOperationBinding) Build(ctx context.Context, keyNode, root *yaml.Node, idx *index.SpecIndex) error {
 	root = s.initBuild(ctx, keyNode, root, idx)
 
-	queues, qLabel, qValue, err := low.ExtractArray[*SQSIdentifier](ctx, QueuesLabel, root, idx)
+	queues, qLabel, qValue, err := low.ExtractArray[*SQSQueue](ctx, QueuesLabel, root, idx)
 	if err != nil {
 		return err
 	}
 	if queues != nil {
-		s.Queues = low.NodeReference[[]low.ValueReference[*SQSIdentifier]]{
+		s.Queues = low.NodeReference[[]low.ValueReference[*SQSQueue]]{
 			Value:     queues,
 			KeyNode:   qLabel,
 			ValueNode: qValue,
