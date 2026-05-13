@@ -147,6 +147,12 @@ func (s *SQSServerBinding) GoLow() *lowasync.SQSServerBinding { return s.low }
 // GoLowUntyped returns the low-level SQSServerBinding with no type.
 func (s *SQSServerBinding) GoLowUntyped() any { return s.low }
 
+// MarshalYAML renders the SQS server binding using low-level metadata.
+func (s *SQSServerBinding) MarshalYAML() (interface{}, error) {
+	nb := high.NewNodeBuilder(s, s.low)
+	return nb.Render(), nil
+}
+
 // SQS Channel Binding
 
 // SQSChannelBinding represents a high-level SQS Channel Binding.
@@ -181,6 +187,12 @@ func (s *SQSChannelBinding) GoLow() *lowasync.SQSChannelBinding { return s.low }
 // GoLowUntyped returns the low-level SQSChannelBinding with no type.
 func (s *SQSChannelBinding) GoLowUntyped() any { return s.low }
 
+// MarshalYAML renders the SQS channel binding using low-level metadata.
+func (s *SQSChannelBinding) MarshalYAML() (interface{}, error) {
+	nb := high.NewNodeBuilder(s, s.low)
+	return nb.Render(), nil
+}
+
 // SQS Operation Binding
 
 // SQSOperationBinding represents a high-level SQS Operation Binding.
@@ -213,6 +225,12 @@ func (s *SQSOperationBinding) GoLow() *lowasync.SQSOperationBinding { return s.l
 // GoLowUntyped returns the low-level SQSOperationBinding with no type.
 func (s *SQSOperationBinding) GoLowUntyped() any { return s.low }
 
+// MarshalYAML renders the SQS operation binding using low-level metadata.
+func (s *SQSOperationBinding) MarshalYAML() (interface{}, error) {
+	nb := high.NewNodeBuilder(s, s.low)
+	return nb.Render(), nil
+}
+
 // SQS Message Binding
 
 // SQSMessageBinding represents a high-level SQS Message Binding.
@@ -236,6 +254,12 @@ func (s *SQSMessageBinding) GoLow() *lowasync.SQSMessageBinding { return s.low }
 
 // GoLowUntyped returns the low-level SQSMessageBinding with no type.
 func (s *SQSMessageBinding) GoLowUntyped() any { return s.low }
+
+// MarshalYAML renders the SQS message binding using low-level metadata.
+func (s *SQSMessageBinding) MarshalYAML() (interface{}, error) {
+	nb := high.NewNodeBuilder(s, s.low)
+	return nb.Render(), nil
+}
 
 // SQSQueue represents high-level SQS queue configuration.
 type SQSQueue struct {
@@ -289,6 +313,12 @@ func (s *SQSQueue) GoLow() *lowasync.SQSQueue { return s.low }
 // GoLowUntyped returns the low-level SQSQueue with no type.
 func (s *SQSQueue) GoLowUntyped() any { return s.low }
 
+// MarshalYAML renders the SQS queue using low-level metadata.
+func (s *SQSQueue) MarshalYAML() (interface{}, error) {
+	nb := high.NewNodeBuilder(s, s.low)
+	return nb.Render(), nil
+}
+
 // SQSIdentifier represents a high-level SQS queue reference.
 type SQSIdentifier struct {
 	Name       string                              `json:"name,omitempty" yaml:"name,omitempty"`
@@ -316,6 +346,12 @@ func (s *SQSIdentifier) GoLow() *lowasync.SQSIdentifier { return s.low }
 
 // GoLowUntyped returns the low-level SQSIdentifier with no type.
 func (s *SQSIdentifier) GoLowUntyped() any { return s.low }
+
+// MarshalYAML renders the SQS identifier using low-level metadata.
+func (s *SQSIdentifier) MarshalYAML() (interface{}, error) {
+	nb := high.NewNodeBuilder(s, s.low)
+	return nb.Render(), nil
+}
 
 // SQSRedrivePolicy represents high-level SQS redrive policy configuration.
 type SQSRedrivePolicy struct {
@@ -345,6 +381,12 @@ func (s *SQSRedrivePolicy) GoLow() *lowasync.SQSRedrivePolicy { return s.low }
 // GoLowUntyped returns the low-level SQSRedrivePolicy with no type.
 func (s *SQSRedrivePolicy) GoLowUntyped() any { return s.low }
 
+// MarshalYAML renders the SQS redrive policy using low-level metadata.
+func (s *SQSRedrivePolicy) MarshalYAML() (interface{}, error) {
+	nb := high.NewNodeBuilder(s, s.low)
+	return nb.Render(), nil
+}
+
 // SQSPolicy represents a high-level SQS queue policy.
 type SQSPolicy struct {
 	Statements []*SQSPolicyStatement               `json:"statements,omitempty" yaml:"statements,omitempty"`
@@ -372,6 +414,12 @@ func (s *SQSPolicy) GoLow() *lowasync.SQSPolicy { return s.low }
 
 // GoLowUntyped returns the low-level SQSPolicy with no type.
 func (s *SQSPolicy) GoLowUntyped() any { return s.low }
+
+// MarshalYAML renders the SQS policy using low-level metadata.
+func (s *SQSPolicy) MarshalYAML() (interface{}, error) {
+	nb := high.NewNodeBuilder(s, s.low)
+	return nb.Render(), nil
+}
 
 // SQSPolicyStatement represents a high-level SQS queue policy statement.
 type SQSPolicyStatement struct {
@@ -404,6 +452,12 @@ func (s *SQSPolicyStatement) GoLow() *lowasync.SQSPolicyStatement { return s.low
 
 // GoLowUntyped returns the low-level SQSPolicyStatement with no type.
 func (s *SQSPolicyStatement) GoLowUntyped() any { return s.low }
+
+// MarshalYAML renders the SQS policy statement using low-level metadata.
+func (s *SQSPolicyStatement) MarshalYAML() (interface{}, error) {
+	nb := high.NewNodeBuilder(s, s.low)
+	return nb.Render(), nil
+}
 
 func yamlStringMap(node *yaml.Node) map[string]string {
 	if node == nil || node.Kind != yaml.MappingNode {

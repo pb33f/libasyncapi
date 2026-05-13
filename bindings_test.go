@@ -5,6 +5,7 @@ package libasyncapi
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -634,6 +635,10 @@ func TestComprehensiveBindings_SQSRenderRoundTrip(t *testing.T) {
 	assert.Contains(t, output, "sqs:")
 	assert.Contains(t, output, "findings-worker")
 	assert.Contains(t, output, "deadLetterQueue:")
+	assert.GreaterOrEqual(t, strings.Count(output, "fifoQueue: false"), 5)
 	assert.Contains(t, output, "bindingVersion: 0.3.0")
 	assert.Contains(t, output, "audit-events.fifo")
+	assert.Contains(t, output, "x-server-binding-ext: value")
+	assert.Contains(t, output, "x-sqs-channel-ext: value")
+	assert.Contains(t, output, "x-sqs-message-ext: value")
 }
