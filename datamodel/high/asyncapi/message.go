@@ -147,6 +147,14 @@ func (b *MessageBindings) GoLowUntyped() any {
 	return b.low
 }
 
+// BindingNames returns protocol binding keys in source order, including bindings without typed models.
+func (b *MessageBindings) BindingNames() []string {
+	if b == nil || b.low == nil {
+		return nil
+	}
+	return bindingNames(b.low.GetRootNode())
+}
+
 // MessageExample represents a high-level AsyncAPI 3.0 Message Example object.
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#messageExampleObject

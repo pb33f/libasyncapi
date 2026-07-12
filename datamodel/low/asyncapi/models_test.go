@@ -39,10 +39,9 @@ func createDocument(t *testing.T, root *yaml.Node, config *DocumentConfiguration
 	return doc
 }
 
-func assertHashNotZero(t *testing.T, hash [32]byte) {
+func assertHashNotZero(t *testing.T, hash uint64) {
 	t.Helper()
-	var zero [32]byte
-	assert.NotEqual(t, zero, hash)
+	assert.NotEqual(t, uint64(0), hash)
 }
 
 func TestCreateDocument_ComprehensiveBindings(t *testing.T) {

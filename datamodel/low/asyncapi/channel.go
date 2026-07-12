@@ -5,7 +5,9 @@ package asyncapi
 
 import (
 	"context"
-	"crypto/sha256"
+	"errors"
+	"fmt"
+	"hash/maphash"
 
 	"github.com/pb33f/libopenapi/datamodel/low"
 	"github.com/pb33f/libopenapi/index"
@@ -127,29 +129,43 @@ func (c *Channel) Build(ctx context.Context, keyNode, root *yaml.Node, idx *inde
 		}
 	}
 
-	// extract servers (array of references)
+	// extract servers (array of references - each element is a mapping with $ref)
+	// The format is:
+	//   servers:
+	//     - $ref: '#/servers/...'
+	var buildErrs []error
 	_, sLabel, sValue := utils.FindKeyNodeFullTop(ServersLabel, root.Content)
+	if sValue != nil && sValue.Kind != yaml.SequenceNode {
+		buildErrs = append(buildErrs, fmt.Errorf("channel servers must be an array of Reference Objects, line %d, column %d",
+			sValue.Line, sValue.Column))
+	}
 	if sValue != nil && sValue.Kind == yaml.SequenceNode {
 		var serverRefs []low.ValueReference[*low.Reference]
 		for _, sn := range sValue.Content {
-			ref := new(low.Reference)
-			ref.SetReference(sn.Value, sn)
+			ref := referenceFromNode(sn)
+			if ref == nil {
+				buildErrs = append(buildErrs, fmt.Errorf("channel servers entry must be a Reference Object containing a non-empty $ref string, line %d, column %d",
+					sn.Line, sn.Column))
+				continue
+			}
 			serverRefs = append(serverRefs, low.ValueReference[*low.Reference]{
 				Value:     ref,
 				ValueNode: sn,
 			})
 		}
-		c.Servers = low.NodeReference[[]low.ValueReference[*low.Reference]]{
-			Value:     serverRefs,
-			KeyNode:   sLabel,
-			ValueNode: sValue,
+		if len(serverRefs) > 0 {
+			c.Servers = low.NodeReference[[]low.ValueReference[*low.Reference]]{
+				Value:     serverRefs,
+				KeyNode:   sLabel,
+				ValueNode: sValue,
+			}
 		}
 	}
 
 	// extract tags
 	tags, tLabel, tValue, err := low.ExtractArray[*Tag](ctx, TagsLabel, root, idx)
 	if err != nil {
-		return err
+		buildErrs = append(buildErrs, err)
 	}
 	if tags != nil {
 		c.Tags = low.NodeReference[[]low.ValueReference[*Tag]]{
@@ -167,69 +183,93 @@ func (c *Channel) Build(ctx context.Context, keyNode, root *yaml.Node, idx *inde
 	bindings, _ := low.ExtractObject[*ChannelBindings](ctx, BindingsLabel, root, idx)
 	c.Bindings = bindings
 
+	return errors.Join(buildErrs...)
+}
+
+func referenceFromNode(node *yaml.Node) *low.Reference {
+	node = utils.NodeAlias(node)
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value != RefLabel {
+			continue
+		}
+		value := utils.NodeAlias(node.Content[i+1])
+		if value == nil || value.Kind != yaml.ScalarNode || value.Value == "" {
+			return nil
+		}
+		ref := new(low.Reference)
+		ref.SetReference(value.Value, value)
+		return ref
+	}
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash of the Channel object.
-func (c *Channel) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-
-	if c.Address.Value != nil {
-		sb.WriteString(*c.Address.Value)
-		sb.WriteByte('|')
-	}
-	if !c.Title.IsEmpty() {
-		sb.WriteString(c.Title.Value)
-		sb.WriteByte('|')
-	}
-	if !c.Summary.IsEmpty() {
-		sb.WriteString(c.Summary.Value)
-		sb.WriteByte('|')
-	}
-	if !c.Description.IsEmpty() {
-		sb.WriteString(c.Description.Value)
-		sb.WriteByte('|')
-	}
-	if c.Messages.Value != nil {
-		for v := range orderedmap.SortAlpha(c.Messages.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+// Hash returns a process-local content hash of the Channel object.
+func (c *Channel) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if c.Address.Value != nil {
+			h.WriteString(*c.Address.Value)
+			h.WriteByte(low.HASH_PIPE)
+		} else if c.Address.ValueNode != nil {
+			// an explicit `address: null` (address unknown) is semantically distinct
+			// from an absent address, so it must hash differently.
+			h.WriteString("\x00null")
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	if c.Parameters.Value != nil {
-		for v := range orderedmap.SortAlpha(c.Parameters.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if !c.Title.IsEmpty() {
+			h.WriteString(c.Title.Value)
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	if c.Servers.Value != nil {
-		for _, srv := range c.Servers.Value {
-			if srv.Value != nil {
-				sb.WriteString(srv.Value.GetReference())
-				sb.WriteByte('|')
+		if !c.Summary.IsEmpty() {
+			h.WriteString(c.Summary.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !c.Description.IsEmpty() {
+			h.WriteString(c.Description.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if c.Messages.Value != nil {
+			for v := range orderedmap.SortAlpha(c.Messages.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
 			}
 		}
-	}
-	if c.Tags.Value != nil {
-		for _, tag := range c.Tags.Value {
-			sb.WriteString(low.GenerateHashString(tag.Value))
-			sb.WriteByte('|')
+		if c.Parameters.Value != nil {
+			for v := range orderedmap.SortAlpha(c.Parameters.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if !c.ExternalDocs.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(c.ExternalDocs.Value))
-		sb.WriteByte('|')
-	}
-	if !c.Bindings.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(c.Bindings.Value))
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(c.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+		if c.Servers.Value != nil {
+			for _, srv := range c.Servers.Value {
+				if srv.Value != nil {
+					h.WriteString(srv.Value.GetReference())
+					h.WriteByte(low.HASH_PIPE)
+				}
+			}
+		}
+		if c.Tags.Value != nil {
+			for _, tag := range c.Tags.Value {
+				h.WriteString(low.GenerateHashString(tag.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if !c.ExternalDocs.IsEmpty() {
+			h.WriteString(low.GenerateHashString(c.ExternalDocs.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !c.Bindings.IsEmpty() {
+			h.WriteString(low.GenerateHashString(c.Bindings.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(c.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // ChannelBindings represents a low-level AsyncAPI 3.0 Channel Bindings object.
@@ -307,35 +347,35 @@ func (cb *ChannelBindings) Build(ctx context.Context, keyNode, root *yaml.Node, 
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash.
-func (cb *ChannelBindings) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !cb.HTTP.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(cb.HTTP.Value))
-		sb.WriteByte('|')
-	}
-	if !cb.WebSocket.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(cb.WebSocket.Value))
-		sb.WriteByte('|')
-	}
-	if !cb.Kafka.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(cb.Kafka.Value))
-		sb.WriteByte('|')
-	}
-	if !cb.AMQP.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(cb.AMQP.Value))
-		sb.WriteByte('|')
-	}
-	if !cb.SQS.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(cb.SQS.Value))
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(cb.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+// Hash returns a process-local content hash.
+func (cb *ChannelBindings) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !cb.HTTP.IsEmpty() {
+			h.WriteString(low.GenerateHashString(cb.HTTP.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !cb.WebSocket.IsEmpty() {
+			h.WriteString(low.GenerateHashString(cb.WebSocket.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !cb.Kafka.IsEmpty() {
+			h.WriteString(low.GenerateHashString(cb.Kafka.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !cb.AMQP.IsEmpty() {
+			h.WriteString(low.GenerateHashString(cb.AMQP.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !cb.SQS.IsEmpty() {
+			h.WriteString(low.GenerateHashString(cb.SQS.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(cb.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // Parameter represents a low-level AsyncAPI 3.0 Parameter object.
@@ -397,26 +437,37 @@ func (p *Parameter) Build(ctx context.Context, keyNode, root *yaml.Node, idx *in
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash of the Parameter object.
-func (p *Parameter) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-
-	if !p.Default.IsEmpty() {
-		sb.WriteString(p.Default.Value)
-		sb.WriteByte('|')
-	}
-	if !p.Description.IsEmpty() {
-		sb.WriteString(p.Description.Value)
-		sb.WriteByte('|')
-	}
-	if !p.Location.IsEmpty() {
-		sb.WriteString(p.Location.Value)
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(p.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+// Hash returns a process-local content hash of the Parameter object.
+func (p *Parameter) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if p.Enum.Value != nil {
+			for _, v := range p.Enum.Value {
+				h.WriteString(v.Value)
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if !p.Default.IsEmpty() {
+			h.WriteString(p.Default.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !p.Description.IsEmpty() {
+			h.WriteString(p.Description.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if p.Examples.Value != nil {
+			for _, v := range p.Examples.Value {
+				h.WriteString(v.Value)
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if !p.Location.IsEmpty() {
+			h.WriteString(p.Location.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(p.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }

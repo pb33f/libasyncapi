@@ -141,6 +141,7 @@ const (
 	// MQTT binding fields
 	CleanSessionLabel           = "cleanSession"
 	LastWillLabel               = "lastWill"
+	MessageLabel                = "message"
 	KeepAliveLabel              = "keepAlive"
 	SessionExpiryIntervalLabel  = "sessionExpiryInterval"
 	MaximumPacketSizeLabel      = "maximumPacketSize"
@@ -162,8 +163,10 @@ const (
 	ReceiveMessageWaitTimeLabel = "receiveMessageWaitTime"
 	MessageRetentionPeriodLabel = "messageRetentionPeriod"
 	RedrivePolicyLabel          = "redrivePolicy"
+	MaxReceiveCountLabel        = "maxReceiveCount"
 	PolicyLabel                 = "policy"
 	StatementsLabel             = "statements"
+	EffectLabel                 = "effect"
 	PrincipalLabel              = "principal"
 	ResourceLabel               = "resource"
 	ConditionLabel              = "condition"

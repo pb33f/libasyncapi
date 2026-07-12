@@ -5,7 +5,7 @@ package asyncapi
 
 import (
 	"context"
-	"crypto/sha256"
+	"hash/maphash"
 
 	"github.com/pb33f/libopenapi/datamodel/low"
 	"github.com/pb33f/libopenapi/datamodel/low/base"
@@ -116,48 +116,47 @@ func (i *Info) Build(ctx context.Context, keyNode, root *yaml.Node, idx *index.S
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash of the Info object.
-func (i *Info) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-
-	if !i.Title.IsEmpty() {
-		sb.WriteString(i.Title.Value)
-		sb.WriteByte('|')
-	}
-	if !i.Version.IsEmpty() {
-		sb.WriteString(i.Version.Value)
-		sb.WriteByte('|')
-	}
-	if !i.Description.IsEmpty() {
-		sb.WriteString(i.Description.Value)
-		sb.WriteByte('|')
-	}
-	if !i.TermsOfService.IsEmpty() {
-		sb.WriteString(i.TermsOfService.Value)
-		sb.WriteByte('|')
-	}
-	if !i.Contact.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(i.Contact.Value))
-		sb.WriteByte('|')
-	}
-	if !i.License.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(i.License.Value))
-		sb.WriteByte('|')
-	}
-	if !i.ExternalDocs.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(i.ExternalDocs.Value))
-		sb.WriteByte('|')
-	}
-	if i.Tags.Value != nil {
-		for v := range orderedmap.SortAlpha(i.Tags.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+// Hash returns a process-local content hash of the Info object.
+func (i *Info) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !i.Title.IsEmpty() {
+			h.WriteString(i.Title.Value)
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	for _, ext := range low.HashExtensions(i.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+		if !i.Version.IsEmpty() {
+			h.WriteString(i.Version.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !i.Description.IsEmpty() {
+			h.WriteString(i.Description.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !i.TermsOfService.IsEmpty() {
+			h.WriteString(i.TermsOfService.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !i.Contact.IsEmpty() {
+			h.WriteString(low.GenerateHashString(i.Contact.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !i.License.IsEmpty() {
+			h.WriteString(low.GenerateHashString(i.License.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !i.ExternalDocs.IsEmpty() {
+			h.WriteString(low.GenerateHashString(i.ExternalDocs.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if i.Tags.Value != nil {
+			for v := range orderedmap.SortAlpha(i.Tags.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		for _, ext := range low.HashExtensions(i.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }

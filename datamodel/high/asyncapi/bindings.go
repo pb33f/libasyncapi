@@ -4,12 +4,29 @@
 package asyncapi
 
 import (
+	"strings"
+
 	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/high"
 	highbase "github.com/pb33f/libopenapi/datamodel/high/base"
 	"github.com/pb33f/libopenapi/orderedmap"
 	"go.yaml.in/yaml/v4"
 )
+
+func bindingNames(root *yaml.Node) []string {
+	if root == nil || root.Kind != yaml.MappingNode {
+		return nil
+	}
+	names := make([]string, 0, len(root.Content)/2)
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		name := strings.TrimSpace(root.Content[i].Value)
+		if name == "" || strings.HasPrefix(strings.ToLower(name), "x-") || strings.HasPrefix(name, "$") {
+			continue
+		}
+		names = append(names, name)
+	}
+	return names
+}
 
 // HTTP Server Binding
 

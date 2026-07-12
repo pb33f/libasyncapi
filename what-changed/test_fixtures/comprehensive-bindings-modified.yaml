@@ -1,0 +1,359 @@
+asyncapi: 3.0.0
+info:
+  title: Comprehensive Bindings Test v2
+  version: 1.0.0
+  description: Test fixture covering all binding fields
+
+servers:
+  kafka-server:
+    host: kafka2.example.com:9092
+    protocol: kafka
+    bindings:
+      kafka:
+        schemaRegistryUrl: https://schema-registry.example.com
+        schemaRegistryVendor: confluent
+        bindingVersion: 0.5.0
+        x-custom: custom-value
+
+  mqtt-server:
+    host: mqtt.example.com:1883
+    protocol: mqtt
+    bindings:
+      mqtt:
+        clientId: test-client-id
+        cleanSession: true
+        keepAlive: 60
+        sessionExpiryInterval: 3600
+        maximumPacketSize: 65535
+        lastWill:
+          topic: /will/topic
+          qos: 1
+          message: Client disconnected unexpectedly
+          retain: true
+        bindingVersion: 0.2.0
+
+  http-server:
+    host: api.example.com:443
+    protocol: https
+    bindings:
+      http:
+        x-http-server-ext: value
+
+  sqs-server:
+    host: sqs.us-east-1.amazonaws.com
+    protocol: sqs
+    bindings:
+      sqs:
+        x-server-binding-ext: value
+
+channels:
+  kafka-channel:
+    address: events/kafka/{eventId}
+    servers:
+      - $ref: '#/servers/mqtt-server'
+    messages:
+      kafkaMessage:
+        $ref: '#/components/messages/kafkaMessage'
+    bindings:
+      kafka:
+        topic: test-topic-v2
+        partitions: 48
+        replicas: 3
+        topicConfiguration:
+          cleanup.policy:
+            - delete
+            - compact
+          retention.ms: 604800000
+          retention.bytes: 1073741824
+          delete.retention.ms: 86400000
+          max.message.bytes: 1048576
+          confluent.key.schema.validation: true
+          confluent.key.subject.name.strategy: TopicNameStrategy
+          confluent.value.schema.validation: true
+          confluent.value.subject.name.strategy: TopicRecordNameStrategy
+        bindingVersion: 0.5.0
+
+  amqp-channel:
+    address: orders/{orderId}
+    messages:
+      amqpMessage:
+        $ref: '#/components/messages/amqpMessage'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: orders-exchange
+          type: direct
+          durable: true
+          autoDelete: false
+          vhost: /test
+        queue:
+          name: orders-queue
+          durable: true
+          exclusive: false
+          autoDelete: false
+          vhost: /test
+        bindingVersion: 0.3.0
+
+  audit-channel:
+    address: /api/audit
+    messages:
+      httpMessage:
+        $ref: '#/components/messages/httpMessage'
+
+  http-channel:
+    address: /api/events
+    messages:
+      httpMessage:
+        $ref: '#/components/messages/httpMessage'
+    bindings:
+      http:
+        x-http-channel-ext: value
+
+  sqs-channel:
+    address: findings-worker
+    messages:
+      sqsMessage:
+        $ref: '#/components/messages/sqsMessage'
+    bindings:
+      sqs:
+        queue:
+          name: findings-worker-v2
+          fifoQueue: false
+          visibilityTimeout: 60
+          receiveMessageWaitTime: 20
+          messageRetentionPeriod: 345600
+          redrivePolicy:
+            deadLetterQueue:
+              name: findings-worker-dlq
+            maxReceiveCount: 5
+          policy:
+            statements:
+              - effect: Allow
+                Principal:
+                  Service: events.amazonaws.com
+                Action:
+                  - sqs:SendMessage
+                Resource: arn:aws:sqs:us-east-1:123456789012:findings-worker
+                Condition:
+                  ArnEquals:
+                    aws:SourceArn: arn:aws:events:us-east-1:123456789012:rule/linus/findings-created-to-worker
+          tags:
+            owner: linus
+            service: findings
+        deadLetterQueue:
+          name: findings-worker-dlq
+          fifoQueue: false
+          messageRetentionPeriod: 1209600
+        bindingVersion: 0.3.0
+        x-sqs-channel-ext: value
+
+  sqs-fifo-channel:
+    address: audit-events.fifo
+    messages:
+      sqsMessage:
+        $ref: '#/components/messages/sqsMessage'
+    bindings:
+      sqs:
+        queue:
+          name: audit-events.fifo
+          fifoQueue: true
+          deduplicationScope: messageGroup
+          fifoThroughputLimit: perMessageGroupId
+          deliveryDelay: 15
+          visibilityTimeout: 45
+          receiveMessageWaitTime: 10
+          messageRetentionPeriod: 86400
+          tags:
+            owner: linus
+            queue_kind: fifo
+        bindingVersion: 0.3.0
+
+operations:
+  kafka-operation:
+    action: receive
+    channel:
+      $ref: '#/channels/kafka-channel'
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          enum:
+            - consumer-group-1
+            - consumer-group-2
+        clientId:
+          type: string
+          pattern: "^client-[a-z]+$"
+        bindingVersion: 0.5.0
+
+  amqp-operation:
+    action: receive
+    channel:
+      $ref: '#/channels/amqp-channel'
+    bindings:
+      amqp:
+        expiration: 30000
+        userId: guest
+        cc:
+          - routing.key.1
+          - routing.key.2
+        priority: 10
+        deliveryMode: 2
+        mandatory: true
+        bcc:
+          - hidden.key.1
+          - hidden.key.2
+        timestamp: true
+        ack: true
+        bindingVersion: 0.3.0
+
+  mqtt-operation:
+    action: send
+    channel:
+      $ref: '#/channels/http-channel'
+    bindings:
+      mqtt:
+        qos: 1
+        retain: true
+        bindingVersion: 0.2.0
+
+  http-operation:
+    action: send
+    channel:
+      $ref: '#/channels/http-channel'
+    bindings:
+      http:
+        method: PUT
+        query:
+          type: object
+          properties:
+            page:
+              type: integer
+        bindingVersion: 0.3.0
+
+  sqs-operation:
+    action: receive
+    channel:
+      $ref: '#/channels/sqs-channel'
+    bindings:
+      sqs:
+        queues:
+          - name: findings-worker
+            fifoQueue: false
+            visibilityTimeout: 75
+            receiveMessageWaitTime: 12
+            messageRetentionPeriod: 172800
+            redrivePolicy:
+              deadLetterQueue:
+                name: findings-worker-dlq
+                fifoQueue: false
+              maxReceiveCount: 7
+            policy:
+              statements:
+                - effect: Allow
+                  Principal:
+                    Service: events.amazonaws.com
+                  Action:
+                    - sqs:ReceiveMessage
+                  Resource: arn:aws:sqs:us-east-1:123456789012:findings-worker
+            tags:
+              operation_scope: receive
+          - name: findings-worker-dlq
+            fifoQueue: false
+            messageRetentionPeriod: 1209600
+        bindingVersion: 0.3.0
+
+components:
+  securitySchemes:
+    saslScram:
+      type: scramSha512
+      description: SASL/SCRAM authentication
+  messages:
+    kafkaMessage:
+      name: kafkaMessage
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          data:
+            type: integer
+      bindings:
+        kafka:
+          key:
+            type: string
+            format: uuid
+          schemaIdLocation: header
+          schemaIdPayloadEncoding: confluent
+          schemaLookupStrategy: TopicIdStrategy
+          bindingVersion: 0.5.0
+
+    amqpMessage:
+      name: amqpMessage
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          data:
+            type: string
+      bindings:
+        amqp:
+          contentEncoding: gzip
+          messageType: order.created
+          bindingVersion: 0.3.0
+
+    mqttMessage:
+      name: mqttMessage
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          data:
+            type: string
+      bindings:
+        mqtt:
+          payloadFormatIndicator: 1
+          correlationData:
+            type: string
+            format: uuid
+          contentType: application/json
+          responseTopic: /response/topic
+          bindingVersion: 0.2.0
+
+    httpMessage:
+      name: httpMessage
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          data:
+            type: string
+      bindings:
+        http:
+          headers:
+            type: object
+            properties:
+              Content-Type:
+                type: string
+          statusCode: 200
+          bindingVersion: 0.3.0
+
+    sqsMessage:
+      name: sqsMessage
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          data:
+            type: string
+      bindings:
+        sqs:
+          x-sqs-message-ext: value
+
+    wsMessage:
+      name: wsMessage
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          data:
+            type: string

@@ -5,8 +5,8 @@ package asyncapi
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
+	"hash/maphash"
 	"sync"
 
 	"github.com/pb33f/libopenapi/datamodel/low"
@@ -163,52 +163,51 @@ func (a *AsyncAPI) Build(ctx context.Context, keyNode, root *yaml.Node, idx *ind
 	return errors.Join(buildErrs...)
 }
 
-// Hash returns a consistent SHA256 Hash of the AsyncAPI document.
-func (a *AsyncAPI) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-
-	if !a.AsyncAPI.IsEmpty() {
-		sb.WriteString(a.AsyncAPI.Value)
-		sb.WriteByte('|')
-	}
-	if !a.ID.IsEmpty() {
-		sb.WriteString(a.ID.Value)
-		sb.WriteByte('|')
-	}
-	if !a.Info.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(a.Info.Value))
-		sb.WriteByte('|')
-	}
-	if !a.DefaultContentType.IsEmpty() {
-		sb.WriteString(a.DefaultContentType.Value)
-		sb.WriteByte('|')
-	}
-	if a.Servers.Value != nil {
-		for v := range orderedmap.SortAlpha(a.Servers.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+// Hash returns a process-local content hash of the AsyncAPI document.
+func (a *AsyncAPI) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !a.AsyncAPI.IsEmpty() {
+			h.WriteString(a.AsyncAPI.Value)
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	if a.Channels.Value != nil {
-		for v := range orderedmap.SortAlpha(a.Channels.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if !a.ID.IsEmpty() {
+			h.WriteString(a.ID.Value)
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	if a.Operations.Value != nil {
-		for v := range orderedmap.SortAlpha(a.Operations.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if !a.Info.IsEmpty() {
+			h.WriteString(low.GenerateHashString(a.Info.Value))
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	if !a.Components.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(a.Components.Value))
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(a.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+		if !a.DefaultContentType.IsEmpty() {
+			h.WriteString(a.DefaultContentType.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if a.Servers.Value != nil {
+			for v := range orderedmap.SortAlpha(a.Servers.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if a.Channels.Value != nil {
+			for v := range orderedmap.SortAlpha(a.Channels.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if a.Operations.Value != nil {
+			for v := range orderedmap.SortAlpha(a.Operations.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if !a.Components.IsEmpty() {
+			h.WriteString(low.GenerateHashString(a.Components.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(a.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }

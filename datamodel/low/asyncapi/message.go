@@ -5,7 +5,7 @@ package asyncapi
 
 import (
 	"context"
-	"crypto/sha256"
+	"hash/maphash"
 
 	"github.com/pb33f/libopenapi/datamodel/low"
 	"github.com/pb33f/libopenapi/datamodel/low/base"
@@ -147,74 +147,73 @@ func (m *Message) Build(ctx context.Context, keyNode, root *yaml.Node, idx *inde
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash of the Message object.
-func (m *Message) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-
-	if !m.Headers.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(m.Headers.Value))
-		sb.WriteByte('|')
-	}
-	if !m.Payload.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(m.Payload.Value))
-		sb.WriteByte('|')
-	}
-	if !m.CorrelationID.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(m.CorrelationID.Value))
-		sb.WriteByte('|')
-	}
-	if !m.ContentType.IsEmpty() {
-		sb.WriteString(m.ContentType.Value)
-		sb.WriteByte('|')
-	}
-	if !m.Name.IsEmpty() {
-		sb.WriteString(m.Name.Value)
-		sb.WriteByte('|')
-	}
-	if !m.Title.IsEmpty() {
-		sb.WriteString(m.Title.Value)
-		sb.WriteByte('|')
-	}
-	if !m.Summary.IsEmpty() {
-		sb.WriteString(m.Summary.Value)
-		sb.WriteByte('|')
-	}
-	if !m.Description.IsEmpty() {
-		sb.WriteString(m.Description.Value)
-		sb.WriteByte('|')
-	}
-	if m.Tags.Value != nil {
-		for _, tag := range m.Tags.Value {
-			sb.WriteString(low.GenerateHashString(tag.Value))
-			sb.WriteByte('|')
+// Hash returns a process-local content hash of the Message object.
+func (m *Message) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !m.Headers.IsEmpty() {
+			h.WriteString(low.GenerateHashString(m.Headers.Value))
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	if !m.ExternalDocs.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(m.ExternalDocs.Value))
-		sb.WriteByte('|')
-	}
-	if !m.Bindings.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(m.Bindings.Value))
-		sb.WriteByte('|')
-	}
-	if m.Examples.Value != nil {
-		for _, ex := range m.Examples.Value {
-			sb.WriteString(low.GenerateHashString(ex.Value))
-			sb.WriteByte('|')
+		if !m.Payload.IsEmpty() {
+			h.WriteString(low.GenerateHashString(m.Payload.Value))
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	if m.Traits.Value != nil {
-		for _, trait := range m.Traits.Value {
-			sb.WriteString(low.GenerateHashString(trait.Value))
-			sb.WriteByte('|')
+		if !m.CorrelationID.IsEmpty() {
+			h.WriteString(low.GenerateHashString(m.CorrelationID.Value))
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	for _, ext := range low.HashExtensions(m.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+		if !m.ContentType.IsEmpty() {
+			h.WriteString(m.ContentType.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.Name.IsEmpty() {
+			h.WriteString(m.Name.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.Title.IsEmpty() {
+			h.WriteString(m.Title.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.Summary.IsEmpty() {
+			h.WriteString(m.Summary.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.Description.IsEmpty() {
+			h.WriteString(m.Description.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if m.Tags.Value != nil {
+			for _, tag := range m.Tags.Value {
+				h.WriteString(low.GenerateHashString(tag.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if !m.ExternalDocs.IsEmpty() {
+			h.WriteString(low.GenerateHashString(m.ExternalDocs.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.Bindings.IsEmpty() {
+			h.WriteString(low.GenerateHashString(m.Bindings.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if m.Examples.Value != nil {
+			for _, ex := range m.Examples.Value {
+				h.WriteString(low.GenerateHashString(ex.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if m.Traits.Value != nil {
+			for _, trait := range m.Traits.Value {
+				h.WriteString(low.GenerateHashString(trait.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		for _, ext := range low.HashExtensions(m.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // MessageBindings represents a low-level AsyncAPI 3.0 Message Bindings object.
@@ -292,35 +291,35 @@ func (mb *MessageBindings) Build(ctx context.Context, keyNode, root *yaml.Node, 
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash.
-func (mb *MessageBindings) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !mb.HTTP.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(mb.HTTP.Value))
-		sb.WriteByte('|')
-	}
-	if !mb.Kafka.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(mb.Kafka.Value))
-		sb.WriteByte('|')
-	}
-	if !mb.AMQP.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(mb.AMQP.Value))
-		sb.WriteByte('|')
-	}
-	if !mb.MQTT.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(mb.MQTT.Value))
-		sb.WriteByte('|')
-	}
-	if !mb.SQS.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(mb.SQS.Value))
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(mb.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+// Hash returns a process-local content hash.
+func (mb *MessageBindings) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !mb.HTTP.IsEmpty() {
+			h.WriteString(low.GenerateHashString(mb.HTTP.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !mb.Kafka.IsEmpty() {
+			h.WriteString(low.GenerateHashString(mb.Kafka.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !mb.AMQP.IsEmpty() {
+			h.WriteString(low.GenerateHashString(mb.AMQP.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !mb.MQTT.IsEmpty() {
+			h.WriteString(low.GenerateHashString(mb.MQTT.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !mb.SQS.IsEmpty() {
+			h.WriteString(low.GenerateHashString(mb.SQS.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(mb.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // MessageExample represents a low-level AsyncAPI 3.0 Message Example object.
@@ -379,23 +378,31 @@ func (me *MessageExample) Build(ctx context.Context, keyNode, root *yaml.Node, i
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash.
-func (me *MessageExample) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !me.Name.IsEmpty() {
-		sb.WriteString(me.Name.Value)
-		sb.WriteByte('|')
-	}
-	if !me.Summary.IsEmpty() {
-		sb.WriteString(me.Summary.Value)
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(me.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+// Hash returns a process-local content hash.
+func (me *MessageExample) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !me.Headers.IsEmpty() {
+			h.WriteString(low.GenerateHashString(me.Headers.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !me.Payload.IsEmpty() {
+			h.WriteString(low.GenerateHashString(me.Payload.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !me.Name.IsEmpty() {
+			h.WriteString(me.Name.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !me.Summary.IsEmpty() {
+			h.WriteString(me.Summary.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(me.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // MessageTrait represents a low-level AsyncAPI 3.0 Message Trait object.
@@ -504,23 +511,63 @@ func (mt *MessageTrait) Build(ctx context.Context, keyNode, root *yaml.Node, idx
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash.
-func (mt *MessageTrait) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !mt.ContentType.IsEmpty() {
-		sb.WriteString(mt.ContentType.Value)
-		sb.WriteByte('|')
-	}
-	if !mt.Name.IsEmpty() {
-		sb.WriteString(mt.Name.Value)
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(mt.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+// Hash returns a process-local content hash.
+func (mt *MessageTrait) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !mt.Headers.IsEmpty() {
+			h.WriteString(low.GenerateHashString(mt.Headers.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !mt.CorrelationID.IsEmpty() {
+			h.WriteString(low.GenerateHashString(mt.CorrelationID.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !mt.ContentType.IsEmpty() {
+			h.WriteString(mt.ContentType.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !mt.Name.IsEmpty() {
+			h.WriteString(mt.Name.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !mt.Title.IsEmpty() {
+			h.WriteString(mt.Title.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !mt.Summary.IsEmpty() {
+			h.WriteString(mt.Summary.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !mt.Description.IsEmpty() {
+			h.WriteString(mt.Description.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if mt.Tags.Value != nil {
+			for _, tag := range mt.Tags.Value {
+				h.WriteString(low.GenerateHashString(tag.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if !mt.ExternalDocs.IsEmpty() {
+			h.WriteString(low.GenerateHashString(mt.ExternalDocs.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !mt.Bindings.IsEmpty() {
+			h.WriteString(low.GenerateHashString(mt.Bindings.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if mt.Examples.Value != nil {
+			for _, ex := range mt.Examples.Value {
+				h.WriteString(low.GenerateHashString(ex.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		for _, ext := range low.HashExtensions(mt.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // CorrelationID represents a low-level AsyncAPI 3.0 Correlation ID object.
@@ -577,21 +624,21 @@ func (ci *CorrelationID) Build(ctx context.Context, keyNode, root *yaml.Node, id
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash.
-func (ci *CorrelationID) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !ci.Description.IsEmpty() {
-		sb.WriteString(ci.Description.Value)
-		sb.WriteByte('|')
-	}
-	if !ci.Location.IsEmpty() {
-		sb.WriteString(ci.Location.Value)
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(ci.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+// Hash returns a process-local content hash.
+func (ci *CorrelationID) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !ci.Description.IsEmpty() {
+			h.WriteString(ci.Description.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ci.Location.IsEmpty() {
+			h.WriteString(ci.Location.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(ci.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }

@@ -5,7 +5,9 @@ package asyncapi
 
 import (
 	"context"
-	"crypto/sha256"
+	"errors"
+	"fmt"
+	"hash/maphash"
 
 	"github.com/pb33f/libopenapi/datamodel/low"
 	"github.com/pb33f/libopenapi/index"
@@ -82,6 +84,7 @@ func (o *Operation) Build(ctx context.Context, keyNode, root *yaml.Node, idx *in
 	o.Extensions = low.ExtractExtensions(root)
 	o.idx = idx
 	o.ctx = ctx
+	var buildErrs []error
 
 	// extract channel reference (channel is always a $ref in AsyncAPI operations)
 	// The channel field format is:
@@ -91,33 +94,30 @@ func (o *Operation) Build(ctx context.Context, keyNode, root *yaml.Node, idx *in
 	_, chanLabel, chanValue := utils.FindKeyNodeFullTop(ChannelLabel, root.Content)
 	if chanValue != nil {
 		o.Nodes.Store(chanLabel.Line, chanLabel)
-		var ref *low.Reference
-		if chanValue.Kind == yaml.MappingNode {
-			for i := 0; i < len(chanValue.Content)-1; i += 2 {
-				if chanValue.Content[i].Value == "$ref" {
-					ref = new(low.Reference)
-					ref.SetReference(chanValue.Content[i+1].Value, chanValue.Content[i+1])
-					break
-				}
-			}
-		}
+		ref := referenceFromNode(chanValue)
 		if ref != nil {
 			o.Channel = low.NodeReference[*low.Reference]{
 				Value:     ref,
 				KeyNode:   chanLabel,
 				ValueNode: chanValue,
 			}
+		} else {
+			buildErrs = append(buildErrs, fmt.Errorf("operation channel must be a Reference Object containing a non-empty $ref string, line %d, column %d",
+				chanValue.Line, chanValue.Column))
 		}
 	}
 
 	// extract reply
-	reply, _ := low.ExtractObject[*OperationReply](ctx, ReplyLabel, root, idx)
+	reply, err := low.ExtractObject[*OperationReply](ctx, ReplyLabel, root, idx)
+	if err != nil {
+		buildErrs = append(buildErrs, err)
+	}
 	o.Reply = reply
 
 	// extract tags
 	tags, tLabel, tValue, err := low.ExtractArray[*Tag](ctx, TagsLabel, root, idx)
 	if err != nil {
-		return err
+		buildErrs = append(buildErrs, err)
 	}
 	if tags != nil {
 		o.Tags = low.NodeReference[[]low.ValueReference[*Tag]]{
@@ -138,7 +138,7 @@ func (o *Operation) Build(ctx context.Context, keyNode, root *yaml.Node, idx *in
 	// extract traits
 	traits, trLabel, trValue, err := low.ExtractArray[*OperationTrait](ctx, TraitsLabel, root, idx)
 	if err != nil {
-		return err
+		buildErrs = append(buildErrs, err)
 	}
 	if traits != nil {
 		o.Traits = low.NodeReference[[]low.ValueReference[*OperationTrait]]{
@@ -151,7 +151,7 @@ func (o *Operation) Build(ctx context.Context, keyNode, root *yaml.Node, idx *in
 	// extract security
 	security, sLabel, sValue, err := low.ExtractArray[*SecurityScheme](ctx, SecurityLabel, root, idx)
 	if err != nil {
-		return err
+		buildErrs = append(buildErrs, err)
 	}
 	if security != nil {
 		o.Security = low.NodeReference[[]low.ValueReference[*SecurityScheme]]{
@@ -166,27 +166,24 @@ func (o *Operation) Build(ctx context.Context, keyNode, root *yaml.Node, idx *in
 	//   messages:
 	//     - $ref: '#/channels/.../messages/...'
 	_, msgsLabel, msgsValue := utils.FindKeyNodeFullTop(MessagesLabel, root.Content)
+	if msgsValue != nil && msgsValue.Kind != yaml.SequenceNode {
+		buildErrs = append(buildErrs, fmt.Errorf("operation messages must be an array of Reference Objects, line %d, column %d",
+			msgsValue.Line, msgsValue.Column))
+	}
 	if msgsValue != nil && msgsValue.Kind == yaml.SequenceNode {
 		o.Nodes.Store(msgsLabel.Line, msgsLabel)
 		var refs []low.ValueReference[*low.Reference]
 		for _, msgNode := range msgsValue.Content {
-			var ref *low.Reference
-			if msgNode.Kind == yaml.MappingNode {
-				for i := 0; i < len(msgNode.Content)-1; i += 2 {
-					if msgNode.Content[i].Value == "$ref" {
-						ref = new(low.Reference)
-						ref.SetReference(msgNode.Content[i+1].Value, msgNode.Content[i+1])
-						break
-					}
-				}
+			ref := referenceFromNode(msgNode)
+			if ref == nil {
+				buildErrs = append(buildErrs, fmt.Errorf("operation messages entry must be a Reference Object containing a non-empty $ref string, line %d, column %d",
+					msgNode.Line, msgNode.Column))
+				continue
 			}
-			// Only append if we found a valid $ref
-			if ref != nil {
-				refs = append(refs, low.ValueReference[*low.Reference]{
-					Value:     ref,
-					ValueNode: msgNode,
-				})
-			}
+			refs = append(refs, low.ValueReference[*low.Reference]{
+				Value:     ref,
+				ValueNode: msgNode,
+			})
 		}
 		if len(refs) > 0 {
 			o.Messages = low.NodeReference[[]low.ValueReference[*low.Reference]]{
@@ -197,77 +194,76 @@ func (o *Operation) Build(ctx context.Context, keyNode, root *yaml.Node, idx *in
 		}
 	}
 
-	return nil
+	return errors.Join(buildErrs...)
 }
 
-// Hash returns a consistent SHA256 Hash of the Operation object.
-func (o *Operation) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-
-	if !o.Action.IsEmpty() {
-		sb.WriteString(o.Action.Value)
-		sb.WriteByte('|')
-	}
-	if o.Channel.Value != nil {
-		sb.WriteString(o.Channel.Value.GetReference())
-		sb.WriteByte('|')
-	}
-	if !o.Title.IsEmpty() {
-		sb.WriteString(o.Title.Value)
-		sb.WriteByte('|')
-	}
-	if !o.Summary.IsEmpty() {
-		sb.WriteString(o.Summary.Value)
-		sb.WriteByte('|')
-	}
-	if !o.Description.IsEmpty() {
-		sb.WriteString(o.Description.Value)
-		sb.WriteByte('|')
-	}
-	if o.Messages.Value != nil {
-		for _, msg := range o.Messages.Value {
-			if msg.Value != nil {
-				sb.WriteString(msg.Value.GetReference())
-				sb.WriteByte('|')
+// Hash returns a process-local content hash of the Operation object.
+func (o *Operation) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !o.Action.IsEmpty() {
+			h.WriteString(o.Action.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if o.Channel.Value != nil {
+			h.WriteString(o.Channel.Value.GetReference())
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !o.Title.IsEmpty() {
+			h.WriteString(o.Title.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !o.Summary.IsEmpty() {
+			h.WriteString(o.Summary.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !o.Description.IsEmpty() {
+			h.WriteString(o.Description.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if o.Messages.Value != nil {
+			for _, msg := range o.Messages.Value {
+				if msg.Value != nil {
+					h.WriteString(msg.Value.GetReference())
+					h.WriteByte(low.HASH_PIPE)
+				}
 			}
 		}
-	}
-	if !o.Reply.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(o.Reply.Value))
-		sb.WriteByte('|')
-	}
-	if o.Security.Value != nil {
-		for _, sec := range o.Security.Value {
-			sb.WriteString(low.GenerateHashString(sec.Value))
-			sb.WriteByte('|')
+		if !o.Reply.IsEmpty() {
+			h.WriteString(low.GenerateHashString(o.Reply.Value))
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	if o.Tags.Value != nil {
-		for _, tag := range o.Tags.Value {
-			sb.WriteString(low.GenerateHashString(tag.Value))
-			sb.WriteByte('|')
+		if o.Security.Value != nil {
+			for _, sec := range o.Security.Value {
+				h.WriteString(low.GenerateHashString(sec.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if !o.ExternalDocs.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(o.ExternalDocs.Value))
-		sb.WriteByte('|')
-	}
-	if !o.Bindings.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(o.Bindings.Value))
-		sb.WriteByte('|')
-	}
-	if o.Traits.Value != nil {
-		for _, trait := range o.Traits.Value {
-			sb.WriteString(low.GenerateHashString(trait.Value))
-			sb.WriteByte('|')
+		if o.Tags.Value != nil {
+			for _, tag := range o.Tags.Value {
+				h.WriteString(low.GenerateHashString(tag.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	for _, ext := range low.HashExtensions(o.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+		if !o.ExternalDocs.IsEmpty() {
+			h.WriteString(low.GenerateHashString(o.ExternalDocs.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !o.Bindings.IsEmpty() {
+			h.WriteString(low.GenerateHashString(o.Bindings.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if o.Traits.Value != nil {
+			for _, trait := range o.Traits.Value {
+				h.WriteString(low.GenerateHashString(trait.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		for _, ext := range low.HashExtensions(o.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // OperationBindings represents a low-level AsyncAPI 3.0 Operation Bindings object.
@@ -345,35 +341,35 @@ func (ob *OperationBindings) Build(ctx context.Context, keyNode, root *yaml.Node
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash.
-func (ob *OperationBindings) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !ob.HTTP.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(ob.HTTP.Value))
-		sb.WriteByte('|')
-	}
-	if !ob.Kafka.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(ob.Kafka.Value))
-		sb.WriteByte('|')
-	}
-	if !ob.AMQP.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(ob.AMQP.Value))
-		sb.WriteByte('|')
-	}
-	if !ob.MQTT.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(ob.MQTT.Value))
-		sb.WriteByte('|')
-	}
-	if !ob.SQS.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(ob.SQS.Value))
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(ob.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+// Hash returns a process-local content hash.
+func (ob *OperationBindings) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !ob.HTTP.IsEmpty() {
+			h.WriteString(low.GenerateHashString(ob.HTTP.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ob.Kafka.IsEmpty() {
+			h.WriteString(low.GenerateHashString(ob.Kafka.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ob.AMQP.IsEmpty() {
+			h.WriteString(low.GenerateHashString(ob.AMQP.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ob.MQTT.IsEmpty() {
+			h.WriteString(low.GenerateHashString(ob.MQTT.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ob.SQS.IsEmpty() {
+			h.WriteString(low.GenerateHashString(ob.SQS.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(ob.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // OperationTrait represents a low-level AsyncAPI 3.0 Operation Trait object.
@@ -470,23 +466,47 @@ func (ot *OperationTrait) Build(ctx context.Context, keyNode, root *yaml.Node, i
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash.
-func (ot *OperationTrait) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !ot.Title.IsEmpty() {
-		sb.WriteString(ot.Title.Value)
-		sb.WriteByte('|')
-	}
-	if !ot.Summary.IsEmpty() {
-		sb.WriteString(ot.Summary.Value)
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(ot.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+// Hash returns a process-local content hash.
+func (ot *OperationTrait) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !ot.Title.IsEmpty() {
+			h.WriteString(ot.Title.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ot.Summary.IsEmpty() {
+			h.WriteString(ot.Summary.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ot.Description.IsEmpty() {
+			h.WriteString(ot.Description.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if ot.Security.Value != nil {
+			for _, sec := range ot.Security.Value {
+				h.WriteString(low.GenerateHashString(sec.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if ot.Tags.Value != nil {
+			for _, tag := range ot.Tags.Value {
+				h.WriteString(low.GenerateHashString(tag.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if !ot.ExternalDocs.IsEmpty() {
+			h.WriteString(low.GenerateHashString(ot.ExternalDocs.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ot.Bindings.IsEmpty() {
+			h.WriteString(low.GenerateHashString(ot.Bindings.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(ot.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // OperationReply represents a low-level AsyncAPI 3.0 Operation Reply object.
@@ -541,6 +561,7 @@ func (or *OperationReply) Build(ctx context.Context, keyNode, root *yaml.Node, i
 	or.Extensions = low.ExtractExtensions(root)
 	or.idx = idx
 	or.ctx = ctx
+	var buildErrs []error
 
 	// extract address
 	addr, _ := low.ExtractObject[*OperationReplyAddress](ctx, AddressLabel, root, idx)
@@ -551,62 +572,78 @@ func (or *OperationReply) Build(ctx context.Context, keyNode, root *yaml.Node, i
 	_, chanLabel, chanValue := utils.FindKeyNodeFullTop(ChannelLabel, root.Content)
 	if chanValue != nil {
 		or.Nodes.Store(chanLabel.Line, chanLabel)
-		ref := new(low.Reference)
-		if chanValue.Kind == yaml.MappingNode {
-			for i := 0; i < len(chanValue.Content)-1; i += 2 {
-				if chanValue.Content[i].Value == "$ref" {
-					ref.SetReference(chanValue.Content[i+1].Value, chanValue.Content[i+1])
-					break
-				}
+		ref := referenceFromNode(chanValue)
+		if ref != nil {
+			or.Channel = low.NodeReference[*low.Reference]{
+				Value:     ref,
+				KeyNode:   chanLabel,
+				ValueNode: chanValue,
 			}
-		}
-		or.Channel = low.NodeReference[*low.Reference]{
-			Value:     ref,
-			KeyNode:   chanLabel,
-			ValueNode: chanValue,
+		} else {
+			buildErrs = append(buildErrs, fmt.Errorf("operation reply channel must be a Reference Object containing a non-empty $ref string, line %d, column %d",
+				chanValue.Line, chanValue.Column))
 		}
 	}
 
 	// extract messages (array of references - each element is a mapping with $ref)
 	// The format is: messages: - $ref: '#/...'
 	_, msgsLabel, msgsValue := utils.FindKeyNodeFullTop(MessagesLabel, root.Content)
+	if msgsValue != nil && msgsValue.Kind != yaml.SequenceNode {
+		buildErrs = append(buildErrs, fmt.Errorf("operation reply messages must be an array of Reference Objects, line %d, column %d",
+			msgsValue.Line, msgsValue.Column))
+	}
 	if msgsValue != nil && msgsValue.Kind == yaml.SequenceNode {
 		or.Nodes.Store(msgsLabel.Line, msgsLabel)
 		var refs []low.ValueReference[*low.Reference]
 		for _, msgNode := range msgsValue.Content {
-			ref := new(low.Reference)
-			if msgNode.Kind == yaml.MappingNode {
-				for i := 0; i < len(msgNode.Content)-1; i += 2 {
-					if msgNode.Content[i].Value == "$ref" {
-						ref.SetReference(msgNode.Content[i+1].Value, msgNode.Content[i+1])
-						break
-					}
-				}
+			ref := referenceFromNode(msgNode)
+			if ref == nil {
+				buildErrs = append(buildErrs, fmt.Errorf("operation reply messages entry must be a Reference Object containing a non-empty $ref string, line %d, column %d",
+					msgNode.Line, msgNode.Column))
+				continue
 			}
 			refs = append(refs, low.ValueReference[*low.Reference]{
 				Value:     ref,
 				ValueNode: msgNode,
 			})
 		}
-		or.Messages = low.NodeReference[[]low.ValueReference[*low.Reference]]{
-			Value:     refs,
-			KeyNode:   msgsLabel,
-			ValueNode: msgsValue,
+		if len(refs) > 0 {
+			or.Messages = low.NodeReference[[]low.ValueReference[*low.Reference]]{
+				Value:     refs,
+				KeyNode:   msgsLabel,
+				ValueNode: msgsValue,
+			}
 		}
 	}
 
-	return nil
+	return errors.Join(buildErrs...)
 }
 
-// Hash returns a consistent SHA256 Hash.
-func (or *OperationReply) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	for _, ext := range low.HashExtensions(or.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+// Hash returns a process-local content hash.
+func (or *OperationReply) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !or.Address.IsEmpty() {
+			h.WriteString(low.GenerateHashString(or.Address.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if or.Channel.Value != nil {
+			h.WriteString(or.Channel.Value.GetReference())
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if or.Messages.Value != nil {
+			for _, msg := range or.Messages.Value {
+				if msg.Value != nil {
+					h.WriteString(msg.Value.GetReference())
+					h.WriteByte(low.HASH_PIPE)
+				}
+			}
+		}
+		for _, ext := range low.HashExtensions(or.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // OperationReplyAddress represents a low-level AsyncAPI 3.0 Operation Reply Address object.
@@ -663,21 +700,21 @@ func (ora *OperationReplyAddress) Build(ctx context.Context, keyNode, root *yaml
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash.
-func (ora *OperationReplyAddress) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !ora.Description.IsEmpty() {
-		sb.WriteString(ora.Description.Value)
-		sb.WriteByte('|')
-	}
-	if !ora.Location.IsEmpty() {
-		sb.WriteString(ora.Location.Value)
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(ora.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+// Hash returns a process-local content hash.
+func (ora *OperationReplyAddress) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !ora.Description.IsEmpty() {
+			h.WriteString(ora.Description.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ora.Location.IsEmpty() {
+			h.WriteString(ora.Location.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(ora.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
