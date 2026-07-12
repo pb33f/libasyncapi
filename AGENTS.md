@@ -150,7 +150,8 @@ doc, err := libasyncapi.NewDocumentWithConfiguration(spec, config)
 Most low-level types follow this shape:
 
 - `Build(ctx, keyNode, root, idx)` parses from YAML.
-- `Hash()` returns a stable content hash.
+- `Hash()` returns a content hash that is stable only within the current process. Hashes
+  use a process-random `maphash` seed and must not be persisted or compared across runs.
 - `GetRootNode()` and `GetKeyNode()` expose YAML nodes.
 - `GetExtensions()` exposes `x-*` extensions.
 - `GetIndex()` and `GetContext()` preserve parser context.

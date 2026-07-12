@@ -5,7 +5,7 @@ package asyncapi
 
 import (
 	"context"
-	"crypto/sha256"
+	"hash/maphash"
 
 	"github.com/pb33f/libopenapi/datamodel/low"
 	"github.com/pb33f/libopenapi/index"
@@ -115,54 +115,53 @@ func (ss *SecurityScheme) Build(ctx context.Context, keyNode, root *yaml.Node, i
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash of the SecurityScheme object.
-func (ss *SecurityScheme) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-
-	if !ss.Type.IsEmpty() {
-		sb.WriteString(ss.Type.Value)
-		sb.WriteByte('|')
-	}
-	if !ss.Description.IsEmpty() {
-		sb.WriteString(ss.Description.Value)
-		sb.WriteByte('|')
-	}
-	if !ss.Name.IsEmpty() {
-		sb.WriteString(ss.Name.Value)
-		sb.WriteByte('|')
-	}
-	if !ss.In.IsEmpty() {
-		sb.WriteString(ss.In.Value)
-		sb.WriteByte('|')
-	}
-	if !ss.Scheme.IsEmpty() {
-		sb.WriteString(ss.Scheme.Value)
-		sb.WriteByte('|')
-	}
-	if !ss.BearerFormat.IsEmpty() {
-		sb.WriteString(ss.BearerFormat.Value)
-		sb.WriteByte('|')
-	}
-	if !ss.Flows.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(ss.Flows.Value))
-		sb.WriteByte('|')
-	}
-	if !ss.OpenIDConnectURL.IsEmpty() {
-		sb.WriteString(ss.OpenIDConnectURL.Value)
-		sb.WriteByte('|')
-	}
-	if ss.Scopes.Value != nil {
-		for _, s := range ss.Scopes.Value {
-			sb.WriteString(s.Value)
-			sb.WriteByte('|')
+// Hash returns a process-local content hash of the SecurityScheme object.
+func (ss *SecurityScheme) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !ss.Type.IsEmpty() {
+			h.WriteString(ss.Type.Value)
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	for _, ext := range low.HashExtensions(ss.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+		if !ss.Description.IsEmpty() {
+			h.WriteString(ss.Description.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ss.Name.IsEmpty() {
+			h.WriteString(ss.Name.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ss.In.IsEmpty() {
+			h.WriteString(ss.In.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ss.Scheme.IsEmpty() {
+			h.WriteString(ss.Scheme.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ss.BearerFormat.IsEmpty() {
+			h.WriteString(ss.BearerFormat.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ss.Flows.IsEmpty() {
+			h.WriteString(low.GenerateHashString(ss.Flows.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !ss.OpenIDConnectURL.IsEmpty() {
+			h.WriteString(ss.OpenIDConnectURL.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if ss.Scopes.Value != nil {
+			for _, s := range ss.Scopes.Value {
+				h.WriteString(s.Value)
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		for _, ext := range low.HashExtensions(ss.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // OAuthFlows represents a low-level AsyncAPI 3.0 OAuth Flows object.
@@ -253,32 +252,31 @@ func (of *OAuthFlows) Build(ctx context.Context, keyNode, root *yaml.Node, idx *
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash of the OAuthFlows object.
-func (of *OAuthFlows) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-
-	if !of.Implicit.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(of.Implicit.Value))
-		sb.WriteByte('|')
-	}
-	if !of.Password.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(of.Password.Value))
-		sb.WriteByte('|')
-	}
-	if !of.ClientCredentials.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(of.ClientCredentials.Value))
-		sb.WriteByte('|')
-	}
-	if !of.AuthorizationCode.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(of.AuthorizationCode.Value))
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(of.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+// Hash returns a process-local content hash of the OAuthFlows object.
+func (of *OAuthFlows) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !of.Implicit.IsEmpty() {
+			h.WriteString(low.GenerateHashString(of.Implicit.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !of.Password.IsEmpty() {
+			h.WriteString(low.GenerateHashString(of.Password.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !of.ClientCredentials.IsEmpty() {
+			h.WriteString(low.GenerateHashString(of.ClientCredentials.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !of.AuthorizationCode.IsEmpty() {
+			h.WriteString(low.GenerateHashString(of.AuthorizationCode.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(of.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // OAuthFlow represents a low-level AsyncAPI 3.0 OAuth Flow object.
@@ -376,34 +374,33 @@ func (of *OAuthFlow) Build(ctx context.Context, keyNode, root *yaml.Node, idx *i
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash of the OAuthFlow object.
-func (of *OAuthFlow) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-
-	if !of.AuthorizationURL.IsEmpty() {
-		sb.WriteString(of.AuthorizationURL.Value)
-		sb.WriteByte('|')
-	}
-	if !of.TokenURL.IsEmpty() {
-		sb.WriteString(of.TokenURL.Value)
-		sb.WriteByte('|')
-	}
-	if !of.RefreshURL.IsEmpty() {
-		sb.WriteString(of.RefreshURL.Value)
-		sb.WriteByte('|')
-	}
-	if of.AvailableScopes.Value != nil {
-		for k, v := range orderedmap.SortAlpha(of.AvailableScopes.Value).FromOldest() {
-			sb.WriteString(k.Value)
-			sb.WriteByte('|')
-			sb.WriteString(v.Value)
-			sb.WriteByte('|')
+// Hash returns a process-local content hash of the OAuthFlow object.
+func (of *OAuthFlow) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !of.AuthorizationURL.IsEmpty() {
+			h.WriteString(of.AuthorizationURL.Value)
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	for _, ext := range low.HashExtensions(of.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+		if !of.TokenURL.IsEmpty() {
+			h.WriteString(of.TokenURL.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !of.RefreshURL.IsEmpty() {
+			h.WriteString(of.RefreshURL.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if of.AvailableScopes.Value != nil {
+			for k, v := range orderedmap.SortAlpha(of.AvailableScopes.Value).FromOldest() {
+				h.WriteString(k.Value)
+				h.WriteByte(low.HASH_PIPE)
+				h.WriteString(v.Value)
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		for _, ext := range low.HashExtensions(of.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }

@@ -5,8 +5,8 @@ package asyncapi
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
+	"hash/maphash"
 	"sync"
 
 	"github.com/pb33f/libopenapi/datamodel/low"
@@ -353,128 +353,127 @@ func (c *Components) Build(ctx context.Context, keyNode, root *yaml.Node, idx *i
 	return errors.Join(buildErrs...)
 }
 
-// Hash returns a consistent SHA256 Hash of the Components object.
-func (c *Components) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-
-	if c.Schemas.Value != nil {
-		for v := range orderedmap.SortAlpha(c.Schemas.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+// Hash returns a process-local content hash of the Components object.
+func (c *Components) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if c.Schemas.Value != nil {
+			for v := range orderedmap.SortAlpha(c.Schemas.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.Servers.Value != nil {
-		for v := range orderedmap.SortAlpha(c.Servers.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.Servers.Value != nil {
+			for v := range orderedmap.SortAlpha(c.Servers.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.Channels.Value != nil {
-		for v := range orderedmap.SortAlpha(c.Channels.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.Channels.Value != nil {
+			for v := range orderedmap.SortAlpha(c.Channels.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.Operations.Value != nil {
-		for v := range orderedmap.SortAlpha(c.Operations.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.Operations.Value != nil {
+			for v := range orderedmap.SortAlpha(c.Operations.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.Messages.Value != nil {
-		for v := range orderedmap.SortAlpha(c.Messages.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.Messages.Value != nil {
+			for v := range orderedmap.SortAlpha(c.Messages.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.SecuritySchemes.Value != nil {
-		for v := range orderedmap.SortAlpha(c.SecuritySchemes.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.SecuritySchemes.Value != nil {
+			for v := range orderedmap.SortAlpha(c.SecuritySchemes.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.ServerVariables.Value != nil {
-		for v := range orderedmap.SortAlpha(c.ServerVariables.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.ServerVariables.Value != nil {
+			for v := range orderedmap.SortAlpha(c.ServerVariables.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.Parameters.Value != nil {
-		for v := range orderedmap.SortAlpha(c.Parameters.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.Parameters.Value != nil {
+			for v := range orderedmap.SortAlpha(c.Parameters.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.CorrelationIDs.Value != nil {
-		for v := range orderedmap.SortAlpha(c.CorrelationIDs.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.CorrelationIDs.Value != nil {
+			for v := range orderedmap.SortAlpha(c.CorrelationIDs.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.Replies.Value != nil {
-		for v := range orderedmap.SortAlpha(c.Replies.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.Replies.Value != nil {
+			for v := range orderedmap.SortAlpha(c.Replies.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.ReplyAddresses.Value != nil {
-		for v := range orderedmap.SortAlpha(c.ReplyAddresses.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.ReplyAddresses.Value != nil {
+			for v := range orderedmap.SortAlpha(c.ReplyAddresses.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.ExternalDocs.Value != nil {
-		for v := range orderedmap.SortAlpha(c.ExternalDocs.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.ExternalDocs.Value != nil {
+			for v := range orderedmap.SortAlpha(c.ExternalDocs.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.Tags.Value != nil {
-		for v := range orderedmap.SortAlpha(c.Tags.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.Tags.Value != nil {
+			for v := range orderedmap.SortAlpha(c.Tags.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.OperationTraits.Value != nil {
-		for v := range orderedmap.SortAlpha(c.OperationTraits.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.OperationTraits.Value != nil {
+			for v := range orderedmap.SortAlpha(c.OperationTraits.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.MessageTraits.Value != nil {
-		for v := range orderedmap.SortAlpha(c.MessageTraits.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.MessageTraits.Value != nil {
+			for v := range orderedmap.SortAlpha(c.MessageTraits.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.ServerBindings.Value != nil {
-		for v := range orderedmap.SortAlpha(c.ServerBindings.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.ServerBindings.Value != nil {
+			for v := range orderedmap.SortAlpha(c.ServerBindings.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.ChannelBindings.Value != nil {
-		for v := range orderedmap.SortAlpha(c.ChannelBindings.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.ChannelBindings.Value != nil {
+			for v := range orderedmap.SortAlpha(c.ChannelBindings.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.OperationBindings.Value != nil {
-		for v := range orderedmap.SortAlpha(c.OperationBindings.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.OperationBindings.Value != nil {
+			for v := range orderedmap.SortAlpha(c.OperationBindings.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if c.MessageBindings.Value != nil {
-		for v := range orderedmap.SortAlpha(c.MessageBindings.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+		if c.MessageBindings.Value != nil {
+			for v := range orderedmap.SortAlpha(c.MessageBindings.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	for _, ext := range low.HashExtensions(c.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+		for _, ext := range low.HashExtensions(c.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }

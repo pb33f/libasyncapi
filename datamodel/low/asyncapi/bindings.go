@@ -5,7 +5,7 @@ package asyncapi
 
 import (
 	"context"
-	"crypto/sha256"
+	"hash/maphash"
 	"strings"
 
 	"github.com/pb33f/libopenapi/datamodel/low"
@@ -60,12 +60,12 @@ func (b *BaseBinding) initBuild(ctx context.Context, keyNode, root *yaml.Node, i
 	return root
 }
 
-// hashExtensions appends extension hashes to the string builder.
+// hashExtensions appends extension hashes to the hasher.
 // This is the common ending for all Hash() methods.
-func (b *BaseBinding) hashExtensions(sb *strings.Builder) {
+func (b *BaseBinding) hashExtensions(h *maphash.Hash) {
 	for _, ext := range low.HashExtensions(b.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
+		h.WriteString(ext)
+		h.WriteByte(low.HASH_PIPE)
 	}
 }
 
@@ -81,11 +81,11 @@ func (h *HTTPServerBinding) Build(ctx context.Context, keyNode, root *yaml.Node,
 	return nil
 }
 
-func (h *HTTPServerBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	h.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (h *HTTPServerBinding) Hash() uint64 {
+	return low.WithHasher(func(f *maphash.Hash) uint64 {
+		h.hashExtensions(f)
+		return f.Sum64()
+	})
 }
 
 // HTTPChannelBinding represents a low-level AsyncAPI 3.0 HTTP Channel Binding object.
@@ -98,11 +98,11 @@ func (h *HTTPChannelBinding) Build(ctx context.Context, keyNode, root *yaml.Node
 	return nil
 }
 
-func (h *HTTPChannelBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	h.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (h *HTTPChannelBinding) Hash() uint64 {
+	return low.WithHasher(func(f *maphash.Hash) uint64 {
+		h.hashExtensions(f)
+		return f.Sum64()
+	})
 }
 
 // HTTPOperationBinding represents a low-level AsyncAPI 3.0 HTTP Operation Binding object.
@@ -124,23 +124,23 @@ func (h *HTTPOperationBinding) Build(ctx context.Context, keyNode, root *yaml.No
 	return nil
 }
 
-func (h *HTTPOperationBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !h.Method.IsEmpty() {
-		sb.WriteString(h.Method.Value)
-		sb.WriteByte('|')
-	}
-	if !h.Query.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(h.Query.Value))
-		sb.WriteByte('|')
-	}
-	if !h.BindingVersion.IsEmpty() {
-		sb.WriteString(h.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	h.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (h *HTTPOperationBinding) Hash() uint64 {
+	return low.WithHasher(func(f *maphash.Hash) uint64 {
+		if !h.Method.IsEmpty() {
+			f.WriteString(h.Method.Value)
+			f.WriteByte(low.HASH_PIPE)
+		}
+		if !h.Query.IsEmpty() {
+			f.WriteString(low.GenerateHashString(h.Query.Value))
+			f.WriteByte(low.HASH_PIPE)
+		}
+		if !h.BindingVersion.IsEmpty() {
+			f.WriteString(h.BindingVersion.Value)
+			f.WriteByte(low.HASH_PIPE)
+		}
+		h.hashExtensions(f)
+		return f.Sum64()
+	})
 }
 
 // HTTPMessageBinding represents a low-level AsyncAPI 3.0 HTTP Message Binding object.
@@ -162,19 +162,23 @@ func (h *HTTPMessageBinding) Build(ctx context.Context, keyNode, root *yaml.Node
 	return nil
 }
 
-func (h *HTTPMessageBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !h.Headers.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(h.Headers.Value))
-		sb.WriteByte('|')
-	}
-	if !h.BindingVersion.IsEmpty() {
-		sb.WriteString(h.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	h.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (h *HTTPMessageBinding) Hash() uint64 {
+	return low.WithHasher(func(f *maphash.Hash) uint64 {
+		if !h.Headers.IsEmpty() {
+			f.WriteString(low.GenerateHashString(h.Headers.Value))
+			f.WriteByte(low.HASH_PIPE)
+		}
+		if !h.StatusCode.IsEmpty() {
+			low.HashInt64(f, int64(h.StatusCode.Value))
+			f.WriteByte(low.HASH_PIPE)
+		}
+		if !h.BindingVersion.IsEmpty() {
+			f.WriteString(h.BindingVersion.Value)
+			f.WriteByte(low.HASH_PIPE)
+		}
+		h.hashExtensions(f)
+		return f.Sum64()
+	})
 }
 
 // SQS Bindings
@@ -189,11 +193,11 @@ func (s *SQSServerBinding) Build(ctx context.Context, keyNode, root *yaml.Node, 
 	return nil
 }
 
-func (s *SQSServerBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	s.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (s *SQSServerBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		s.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // SQSChannelBinding represents a low-level AsyncAPI SQS Channel Binding object.
@@ -216,23 +220,23 @@ func (s *SQSChannelBinding) Build(ctx context.Context, keyNode, root *yaml.Node,
 	return nil
 }
 
-func (s *SQSChannelBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !s.Queue.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(s.Queue.Value))
-		sb.WriteByte('|')
-	}
-	if !s.DeadLetterQueue.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(s.DeadLetterQueue.Value))
-		sb.WriteByte('|')
-	}
-	if !s.BindingVersion.IsEmpty() {
-		sb.WriteString(s.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	s.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (s *SQSChannelBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !s.Queue.IsEmpty() {
+			h.WriteString(low.GenerateHashString(s.Queue.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.DeadLetterQueue.IsEmpty() {
+			h.WriteString(low.GenerateHashString(s.DeadLetterQueue.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.BindingVersion.IsEmpty() {
+			h.WriteString(s.BindingVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		s.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // SQSOperationBinding represents a low-level AsyncAPI SQS Operation Binding object.
@@ -260,21 +264,21 @@ func (s *SQSOperationBinding) Build(ctx context.Context, keyNode, root *yaml.Nod
 	return nil
 }
 
-func (s *SQSOperationBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if s.Queues.Value != nil {
-		for _, queue := range s.Queues.Value {
-			sb.WriteString(low.GenerateHashString(queue.Value))
-			sb.WriteByte('|')
+func (s *SQSOperationBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if s.Queues.Value != nil {
+			for _, queue := range s.Queues.Value {
+				h.WriteString(low.GenerateHashString(queue.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	if !s.BindingVersion.IsEmpty() {
-		sb.WriteString(s.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	s.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+		if !s.BindingVersion.IsEmpty() {
+			h.WriteString(s.BindingVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		s.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // SQSMessageBinding represents a low-level AsyncAPI SQS Message Binding object.
@@ -287,11 +291,11 @@ func (s *SQSMessageBinding) Build(ctx context.Context, keyNode, root *yaml.Node,
 	return nil
 }
 
-func (s *SQSMessageBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	s.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (s *SQSMessageBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		s.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // SQSQueue represents SQS queue configuration.
@@ -332,48 +336,48 @@ func (s *SQSQueue) Build(ctx context.Context, keyNode, root *yaml.Node, idx *ind
 	return nil
 }
 
-func (s *SQSQueue) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	hashSQSIdentifierFields(sb, s.Name, s.ARN, s.FifoQueue)
-	if !s.DeduplicationScope.IsEmpty() {
-		sb.WriteString(s.DeduplicationScope.Value)
-		sb.WriteByte('|')
-	}
-	if !s.FifoThroughputLimit.IsEmpty() {
-		sb.WriteString(s.FifoThroughputLimit.Value)
-		sb.WriteByte('|')
-	}
-	if !s.DeliveryDelay.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(s.DeliveryDelay.Value))
-		sb.WriteByte('|')
-	}
-	if !s.VisibilityTimeout.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(s.VisibilityTimeout.Value))
-		sb.WriteByte('|')
-	}
-	if !s.ReceiveMessageWaitTime.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(s.ReceiveMessageWaitTime.Value))
-		sb.WriteByte('|')
-	}
-	if !s.MessageRetentionPeriod.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(s.MessageRetentionPeriod.Value))
-		sb.WriteByte('|')
-	}
-	if !s.RedrivePolicy.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(s.RedrivePolicy.Value))
-		sb.WriteByte('|')
-	}
-	if !s.Policy.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(s.Policy.Value))
-		sb.WriteByte('|')
-	}
-	if !s.Tags.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(s.Tags.Value))
-		sb.WriteByte('|')
-	}
-	s.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (s *SQSQueue) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		hashSQSIdentifierFields(h, s.Name, s.ARN, s.FifoQueue)
+		if !s.DeduplicationScope.IsEmpty() {
+			h.WriteString(s.DeduplicationScope.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.FifoThroughputLimit.IsEmpty() {
+			h.WriteString(s.FifoThroughputLimit.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.DeliveryDelay.IsEmpty() {
+			low.HashInt64(h, int64(s.DeliveryDelay.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.VisibilityTimeout.IsEmpty() {
+			low.HashInt64(h, int64(s.VisibilityTimeout.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.ReceiveMessageWaitTime.IsEmpty() {
+			low.HashInt64(h, int64(s.ReceiveMessageWaitTime.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.MessageRetentionPeriod.IsEmpty() {
+			low.HashInt64(h, int64(s.MessageRetentionPeriod.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.RedrivePolicy.IsEmpty() {
+			h.WriteString(low.GenerateHashString(s.RedrivePolicy.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.Policy.IsEmpty() {
+			h.WriteString(low.GenerateHashString(s.Policy.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.Tags.IsEmpty() {
+			h.WriteString(low.GenerateHashString(s.Tags.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		s.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // SQSIdentifier represents a named SQS queue reference.
@@ -389,12 +393,12 @@ func (s *SQSIdentifier) Build(ctx context.Context, keyNode, root *yaml.Node, idx
 	return nil
 }
 
-func (s *SQSIdentifier) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	hashSQSIdentifierFields(sb, s.Name, s.ARN, s.FifoQueue)
-	s.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (s *SQSIdentifier) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		hashSQSIdentifierFields(h, s.Name, s.ARN, s.FifoQueue)
+		s.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // SQSRedrivePolicy represents SQS redrive policy configuration.
@@ -413,19 +417,19 @@ func (s *SQSRedrivePolicy) Build(ctx context.Context, keyNode, root *yaml.Node, 
 	return nil
 }
 
-func (s *SQSRedrivePolicy) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !s.DeadLetterQueue.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(s.DeadLetterQueue.Value))
-		sb.WriteByte('|')
-	}
-	if !s.MaxReceiveCount.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(s.MaxReceiveCount.Value))
-		sb.WriteByte('|')
-	}
-	s.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (s *SQSRedrivePolicy) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !s.DeadLetterQueue.IsEmpty() {
+			h.WriteString(low.GenerateHashString(s.DeadLetterQueue.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.MaxReceiveCount.IsEmpty() {
+			low.HashInt64(h, int64(s.MaxReceiveCount.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		s.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // SQSPolicy represents an SQS queue policy.
@@ -452,17 +456,17 @@ func (s *SQSPolicy) Build(ctx context.Context, keyNode, root *yaml.Node, idx *in
 	return nil
 }
 
-func (s *SQSPolicy) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if s.Statements.Value != nil {
-		for _, statement := range s.Statements.Value {
-			sb.WriteString(low.GenerateHashString(statement.Value))
-			sb.WriteByte('|')
+func (s *SQSPolicy) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if s.Statements.Value != nil {
+			for _, statement := range s.Statements.Value {
+				h.WriteString(low.GenerateHashString(statement.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
 		}
-	}
-	s.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+		s.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // SQSPolicyStatement represents an SQS queue policy statement.
@@ -484,19 +488,19 @@ func (s *SQSPolicyStatement) Build(ctx context.Context, keyNode, root *yaml.Node
 	return nil
 }
 
-func (s *SQSPolicyStatement) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !s.Effect.IsEmpty() {
-		sb.WriteString(s.Effect.Value)
-		sb.WriteByte('|')
-	}
-	hashRawNodeReference(sb, s.Principal)
-	hashRawNodeReference(sb, s.Action)
-	hashRawNodeReference(sb, s.Resource)
-	hashRawNodeReference(sb, s.Condition)
-	s.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (s *SQSPolicyStatement) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !s.Effect.IsEmpty() {
+			h.WriteString(s.Effect.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		hashRawNodeReference(h, s.Principal)
+		hashRawNodeReference(h, s.Action)
+		hashRawNodeReference(h, s.Resource)
+		hashRawNodeReference(h, s.Condition)
+		s.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 func extractRawNodeReference(label string, root *yaml.Node) low.NodeReference[*yaml.Node] {
@@ -520,25 +524,25 @@ func extractRawNodeReference(label string, root *yaml.Node) low.NodeReference[*y
 	}
 }
 
-func hashRawNodeReference(sb *strings.Builder, ref low.NodeReference[*yaml.Node]) {
+func hashRawNodeReference(h *maphash.Hash, ref low.NodeReference[*yaml.Node]) {
 	if !ref.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(ref.Value))
-		sb.WriteByte('|')
+		h.WriteString(low.GenerateHashString(ref.Value))
+		h.WriteByte(low.HASH_PIPE)
 	}
 }
 
-func hashSQSIdentifierFields(sb *strings.Builder, name low.NodeReference[string], arn low.NodeReference[string], fifoQueue low.NodeReference[bool]) {
+func hashSQSIdentifierFields(h *maphash.Hash, name low.NodeReference[string], arn low.NodeReference[string], fifoQueue low.NodeReference[bool]) {
 	if !name.IsEmpty() {
-		sb.WriteString(name.Value)
-		sb.WriteByte('|')
+		h.WriteString(name.Value)
+		h.WriteByte(low.HASH_PIPE)
 	}
 	if !arn.IsEmpty() {
-		sb.WriteString(arn.Value)
-		sb.WriteByte('|')
+		h.WriteString(arn.Value)
+		h.WriteByte(low.HASH_PIPE)
 	}
 	if !fifoQueue.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(fifoQueue.Value))
-		sb.WriteByte('|')
+		low.HashBool(h, fifoQueue.Value)
+		h.WriteByte(low.HASH_PIPE)
 	}
 }
 
@@ -559,23 +563,23 @@ func (k *KafkaServerBinding) Build(ctx context.Context, keyNode, root *yaml.Node
 	return nil
 }
 
-func (k *KafkaServerBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !k.SchemaRegistryURL.IsEmpty() {
-		sb.WriteString(k.SchemaRegistryURL.Value)
-		sb.WriteByte('|')
-	}
-	if !k.SchemaRegistryVendor.IsEmpty() {
-		sb.WriteString(k.SchemaRegistryVendor.Value)
-		sb.WriteByte('|')
-	}
-	if !k.BindingVersion.IsEmpty() {
-		sb.WriteString(k.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	k.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (k *KafkaServerBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !k.SchemaRegistryURL.IsEmpty() {
+			h.WriteString(k.SchemaRegistryURL.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.SchemaRegistryVendor.IsEmpty() {
+			h.WriteString(k.SchemaRegistryVendor.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.BindingVersion.IsEmpty() {
+			h.WriteString(k.BindingVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		k.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // KafkaChannelBinding represents a low-level AsyncAPI 3.0 Kafka Channel Binding object.
@@ -599,23 +603,31 @@ func (k *KafkaChannelBinding) Build(ctx context.Context, keyNode, root *yaml.Nod
 	return nil
 }
 
-func (k *KafkaChannelBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !k.Topic.IsEmpty() {
-		sb.WriteString(k.Topic.Value)
-		sb.WriteByte('|')
-	}
-	if !k.TopicConfiguration.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(k.TopicConfiguration.Value))
-		sb.WriteByte('|')
-	}
-	if !k.BindingVersion.IsEmpty() {
-		sb.WriteString(k.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	k.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (k *KafkaChannelBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !k.Topic.IsEmpty() {
+			h.WriteString(k.Topic.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.Partitions.IsEmpty() {
+			low.HashInt64(h, int64(k.Partitions.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.Replicas.IsEmpty() {
+			low.HashInt64(h, int64(k.Replicas.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.TopicConfiguration.IsEmpty() {
+			h.WriteString(low.GenerateHashString(k.TopicConfiguration.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.BindingVersion.IsEmpty() {
+			h.WriteString(k.BindingVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		k.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // KafkaTopicConfiguration represents Kafka topic configuration.
@@ -637,11 +649,49 @@ func (k *KafkaTopicConfiguration) Build(ctx context.Context, keyNode, root *yaml
 	return nil
 }
 
-func (k *KafkaTopicConfiguration) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	k.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (k *KafkaTopicConfiguration) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if k.CleanupPolicy.Value != nil {
+			for _, policy := range k.CleanupPolicy.Value {
+				h.WriteString(policy.Value)
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if !k.RetentionMs.IsEmpty() {
+			low.HashInt64(h, k.RetentionMs.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.RetentionBytes.IsEmpty() {
+			low.HashInt64(h, k.RetentionBytes.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.DeleteRetentionMs.IsEmpty() {
+			low.HashInt64(h, k.DeleteRetentionMs.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.MaxMessageBytes.IsEmpty() {
+			low.HashInt64(h, int64(k.MaxMessageBytes.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.ConfluentKeySchemaValidation.IsEmpty() {
+			low.HashBool(h, k.ConfluentKeySchemaValidation.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.ConfluentKeySubjectNameStrategy.IsEmpty() {
+			h.WriteString(k.ConfluentKeySubjectNameStrategy.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.ConfluentValueSchemaValidation.IsEmpty() {
+			low.HashBool(h, k.ConfluentValueSchemaValidation.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.ConfluentValueSubjectNameStrategy.IsEmpty() {
+			h.WriteString(k.ConfluentValueSubjectNameStrategy.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		k.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // KafkaOperationBinding represents a low-level AsyncAPI 3.0 Kafka Operation Binding object.
@@ -666,23 +716,23 @@ func (k *KafkaOperationBinding) Build(ctx context.Context, keyNode, root *yaml.N
 	return nil
 }
 
-func (k *KafkaOperationBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !k.GroupID.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(k.GroupID.Value))
-		sb.WriteByte('|')
-	}
-	if !k.ClientID.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(k.ClientID.Value))
-		sb.WriteByte('|')
-	}
-	if !k.BindingVersion.IsEmpty() {
-		sb.WriteString(k.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	k.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (k *KafkaOperationBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !k.GroupID.IsEmpty() {
+			h.WriteString(low.GenerateHashString(k.GroupID.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.ClientID.IsEmpty() {
+			h.WriteString(low.GenerateHashString(k.ClientID.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.BindingVersion.IsEmpty() {
+			h.WriteString(k.BindingVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		k.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // KafkaMessageBinding represents a low-level AsyncAPI 3.0 Kafka Message Binding object.
@@ -706,31 +756,31 @@ func (k *KafkaMessageBinding) Build(ctx context.Context, keyNode, root *yaml.Nod
 	return nil
 }
 
-func (k *KafkaMessageBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !k.Key.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(k.Key.Value))
-		sb.WriteByte('|')
-	}
-	if !k.SchemaIDLocation.IsEmpty() {
-		sb.WriteString(k.SchemaIDLocation.Value)
-		sb.WriteByte('|')
-	}
-	if !k.SchemaIDPayloadEncoding.IsEmpty() {
-		sb.WriteString(k.SchemaIDPayloadEncoding.Value)
-		sb.WriteByte('|')
-	}
-	if !k.SchemaLookupStrategy.IsEmpty() {
-		sb.WriteString(k.SchemaLookupStrategy.Value)
-		sb.WriteByte('|')
-	}
-	if !k.BindingVersion.IsEmpty() {
-		sb.WriteString(k.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	k.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (k *KafkaMessageBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !k.Key.IsEmpty() {
+			h.WriteString(low.GenerateHashString(k.Key.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.SchemaIDLocation.IsEmpty() {
+			h.WriteString(k.SchemaIDLocation.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.SchemaIDPayloadEncoding.IsEmpty() {
+			h.WriteString(k.SchemaIDPayloadEncoding.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.SchemaLookupStrategy.IsEmpty() {
+			h.WriteString(k.SchemaLookupStrategy.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !k.BindingVersion.IsEmpty() {
+			h.WriteString(k.BindingVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		k.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // WebSocket Bindings
@@ -758,27 +808,27 @@ func (w *WebSocketChannelBinding) Build(ctx context.Context, keyNode, root *yaml
 	return nil
 }
 
-func (w *WebSocketChannelBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !w.Method.IsEmpty() {
-		sb.WriteString(w.Method.Value)
-		sb.WriteByte('|')
-	}
-	if !w.Query.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(w.Query.Value))
-		sb.WriteByte('|')
-	}
-	if !w.Headers.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(w.Headers.Value))
-		sb.WriteByte('|')
-	}
-	if !w.BindingVersion.IsEmpty() {
-		sb.WriteString(w.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	w.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (w *WebSocketChannelBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !w.Method.IsEmpty() {
+			h.WriteString(w.Method.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !w.Query.IsEmpty() {
+			h.WriteString(low.GenerateHashString(w.Query.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !w.Headers.IsEmpty() {
+			h.WriteString(low.GenerateHashString(w.Headers.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !w.BindingVersion.IsEmpty() {
+			h.WriteString(w.BindingVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		w.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // AMQP Bindings
@@ -806,27 +856,27 @@ func (a *AMQPChannelBinding) Build(ctx context.Context, keyNode, root *yaml.Node
 	return nil
 }
 
-func (a *AMQPChannelBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !a.Is.IsEmpty() {
-		sb.WriteString(a.Is.Value)
-		sb.WriteByte('|')
-	}
-	if !a.Exchange.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(a.Exchange.Value))
-		sb.WriteByte('|')
-	}
-	if !a.Queue.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(a.Queue.Value))
-		sb.WriteByte('|')
-	}
-	if !a.BindingVersion.IsEmpty() {
-		sb.WriteString(a.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	a.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (a *AMQPChannelBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !a.Is.IsEmpty() {
+			h.WriteString(a.Is.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.Exchange.IsEmpty() {
+			h.WriteString(low.GenerateHashString(a.Exchange.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.Queue.IsEmpty() {
+			h.WriteString(low.GenerateHashString(a.Queue.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.BindingVersion.IsEmpty() {
+			h.WriteString(a.BindingVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		a.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // AMQPExchange represents AMQP exchange configuration.
@@ -844,23 +894,31 @@ func (a *AMQPExchange) Build(ctx context.Context, keyNode, root *yaml.Node, idx 
 	return nil
 }
 
-func (a *AMQPExchange) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !a.Name.IsEmpty() {
-		sb.WriteString(a.Name.Value)
-		sb.WriteByte('|')
-	}
-	if !a.Type.IsEmpty() {
-		sb.WriteString(a.Type.Value)
-		sb.WriteByte('|')
-	}
-	if !a.VHost.IsEmpty() {
-		sb.WriteString(a.VHost.Value)
-		sb.WriteByte('|')
-	}
-	a.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (a *AMQPExchange) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !a.Name.IsEmpty() {
+			h.WriteString(a.Name.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.Type.IsEmpty() {
+			h.WriteString(a.Type.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.Durable.IsEmpty() {
+			low.HashBool(h, a.Durable.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.AutoDelete.IsEmpty() {
+			low.HashBool(h, a.AutoDelete.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.VHost.IsEmpty() {
+			h.WriteString(a.VHost.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		a.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // AMQPQueue represents AMQP queue configuration.
@@ -878,19 +936,31 @@ func (a *AMQPQueue) Build(ctx context.Context, keyNode, root *yaml.Node, idx *in
 	return nil
 }
 
-func (a *AMQPQueue) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !a.Name.IsEmpty() {
-		sb.WriteString(a.Name.Value)
-		sb.WriteByte('|')
-	}
-	if !a.VHost.IsEmpty() {
-		sb.WriteString(a.VHost.Value)
-		sb.WriteByte('|')
-	}
-	a.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (a *AMQPQueue) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !a.Name.IsEmpty() {
+			h.WriteString(a.Name.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.Durable.IsEmpty() {
+			low.HashBool(h, a.Durable.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.Exclusive.IsEmpty() {
+			low.HashBool(h, a.Exclusive.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.AutoDelete.IsEmpty() {
+			low.HashBool(h, a.AutoDelete.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.VHost.IsEmpty() {
+			h.WriteString(a.VHost.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		a.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // AMQPOperationBinding represents a low-level AsyncAPI 3.0 AMQP Operation Binding object.
@@ -915,19 +985,55 @@ func (a *AMQPOperationBinding) Build(ctx context.Context, keyNode, root *yaml.No
 	return nil
 }
 
-func (a *AMQPOperationBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !a.UserID.IsEmpty() {
-		sb.WriteString(a.UserID.Value)
-		sb.WriteByte('|')
-	}
-	if !a.BindingVersion.IsEmpty() {
-		sb.WriteString(a.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	a.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (a *AMQPOperationBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !a.Expiration.IsEmpty() {
+			low.HashInt64(h, int64(a.Expiration.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.UserID.IsEmpty() {
+			h.WriteString(a.UserID.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if a.CC.Value != nil {
+			for _, cc := range a.CC.Value {
+				h.WriteString(cc.Value)
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if !a.Priority.IsEmpty() {
+			low.HashInt64(h, int64(a.Priority.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.DeliveryMode.IsEmpty() {
+			low.HashInt64(h, int64(a.DeliveryMode.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.Mandatory.IsEmpty() {
+			low.HashBool(h, a.Mandatory.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if a.BCC.Value != nil {
+			for _, bcc := range a.BCC.Value {
+				h.WriteString(bcc.Value)
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if !a.Timestamp.IsEmpty() {
+			low.HashBool(h, a.Timestamp.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.Ack.IsEmpty() {
+			low.HashBool(h, a.Ack.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.BindingVersion.IsEmpty() {
+			h.WriteString(a.BindingVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		a.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // AMQPMessageBinding represents a low-level AsyncAPI 3.0 AMQP Message Binding object.
@@ -945,23 +1051,23 @@ func (a *AMQPMessageBinding) Build(ctx context.Context, keyNode, root *yaml.Node
 	return nil
 }
 
-func (a *AMQPMessageBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !a.ContentEncoding.IsEmpty() {
-		sb.WriteString(a.ContentEncoding.Value)
-		sb.WriteByte('|')
-	}
-	if !a.MessageType.IsEmpty() {
-		sb.WriteString(a.MessageType.Value)
-		sb.WriteByte('|')
-	}
-	if !a.BindingVersion.IsEmpty() {
-		sb.WriteString(a.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	a.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (a *AMQPMessageBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !a.ContentEncoding.IsEmpty() {
+			h.WriteString(a.ContentEncoding.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.MessageType.IsEmpty() {
+			h.WriteString(a.MessageType.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !a.BindingVersion.IsEmpty() {
+			h.WriteString(a.BindingVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		a.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // MQTT Bindings
@@ -989,23 +1095,39 @@ func (m *MQTTServerBinding) Build(ctx context.Context, keyNode, root *yaml.Node,
 	return nil
 }
 
-func (m *MQTTServerBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !m.ClientID.IsEmpty() {
-		sb.WriteString(m.ClientID.Value)
-		sb.WriteByte('|')
-	}
-	if !m.LastWill.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(m.LastWill.Value))
-		sb.WriteByte('|')
-	}
-	if !m.BindingVersion.IsEmpty() {
-		sb.WriteString(m.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	m.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (m *MQTTServerBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !m.ClientID.IsEmpty() {
+			h.WriteString(m.ClientID.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.CleanSession.IsEmpty() {
+			low.HashBool(h, m.CleanSession.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.LastWill.IsEmpty() {
+			h.WriteString(low.GenerateHashString(m.LastWill.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.KeepAlive.IsEmpty() {
+			low.HashInt64(h, int64(m.KeepAlive.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.SessionExpiryInterval.IsEmpty() {
+			low.HashInt64(h, int64(m.SessionExpiryInterval.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.MaximumPacketSize.IsEmpty() {
+			low.HashInt64(h, int64(m.MaximumPacketSize.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.BindingVersion.IsEmpty() {
+			h.WriteString(m.BindingVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		m.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // MQTTLastWill represents MQTT Last Will configuration.
@@ -1022,19 +1144,27 @@ func (m *MQTTLastWill) Build(ctx context.Context, keyNode, root *yaml.Node, idx 
 	return nil
 }
 
-func (m *MQTTLastWill) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !m.Topic.IsEmpty() {
-		sb.WriteString(m.Topic.Value)
-		sb.WriteByte('|')
-	}
-	if !m.Message.IsEmpty() {
-		sb.WriteString(m.Message.Value)
-		sb.WriteByte('|')
-	}
-	m.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (m *MQTTLastWill) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !m.Topic.IsEmpty() {
+			h.WriteString(m.Topic.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.QoS.IsEmpty() {
+			low.HashInt64(h, int64(m.QoS.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.Message.IsEmpty() {
+			h.WriteString(m.Message.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.Retain.IsEmpty() {
+			low.HashBool(h, m.Retain.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		m.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // MQTTOperationBinding represents a low-level AsyncAPI 3.0 MQTT Operation Binding object.
@@ -1052,15 +1182,23 @@ func (m *MQTTOperationBinding) Build(ctx context.Context, keyNode, root *yaml.No
 	return nil
 }
 
-func (m *MQTTOperationBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !m.BindingVersion.IsEmpty() {
-		sb.WriteString(m.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	m.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (m *MQTTOperationBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !m.QoS.IsEmpty() {
+			low.HashInt64(h, int64(m.QoS.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.Retain.IsEmpty() {
+			low.HashBool(h, m.Retain.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.BindingVersion.IsEmpty() {
+			h.WriteString(m.BindingVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		m.hashExtensions(h)
+		return h.Sum64()
+	})
 }
 
 // MQTTMessageBinding represents a low-level AsyncAPI 3.0 MQTT Message Binding object.
@@ -1084,25 +1222,29 @@ func (m *MQTTMessageBinding) Build(ctx context.Context, keyNode, root *yaml.Node
 	return nil
 }
 
-func (m *MQTTMessageBinding) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-	if !m.CorrelationData.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(m.CorrelationData.Value))
-		sb.WriteByte('|')
-	}
-	if !m.ContentType.IsEmpty() {
-		sb.WriteString(m.ContentType.Value)
-		sb.WriteByte('|')
-	}
-	if !m.ResponseTopic.IsEmpty() {
-		sb.WriteString(m.ResponseTopic.Value)
-		sb.WriteByte('|')
-	}
-	if !m.BindingVersion.IsEmpty() {
-		sb.WriteString(m.BindingVersion.Value)
-		sb.WriteByte('|')
-	}
-	m.hashExtensions(sb)
-	return sha256.Sum256([]byte(sb.String()))
+func (m *MQTTMessageBinding) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !m.PayloadFormatIndicator.IsEmpty() {
+			low.HashInt64(h, int64(m.PayloadFormatIndicator.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.CorrelationData.IsEmpty() {
+			h.WriteString(low.GenerateHashString(m.CorrelationData.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.ContentType.IsEmpty() {
+			h.WriteString(m.ContentType.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.ResponseTopic.IsEmpty() {
+			h.WriteString(m.ResponseTopic.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !m.BindingVersion.IsEmpty() {
+			h.WriteString(m.BindingVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		m.hashExtensions(h)
+		return h.Sum64()
+	})
 }

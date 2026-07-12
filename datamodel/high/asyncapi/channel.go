@@ -86,7 +86,9 @@ func (c *Channel) Render() ([]byte, error) {
 // MarshalYAML will create a ready to render YAML representation of the Channel object.
 func (c *Channel) MarshalYAML() (interface{}, error) {
 	nb := high.NewNodeBuilder(c, c.low)
-	return nb.Render(), nil
+	node := nb.Render()
+	patchReferenceField(node, lowasync.ServersLabel, c.Servers, true)
+	return node, nil
 }
 
 // ChannelBindings represents a high-level AsyncAPI 3.0 Channel Bindings object.
@@ -133,6 +135,14 @@ func (b *ChannelBindings) GoLow() *lowasync.ChannelBindings {
 // GoLowUntyped returns the low-level ChannelBindings instance with no type.
 func (b *ChannelBindings) GoLowUntyped() any {
 	return b.low
+}
+
+// BindingNames returns protocol binding keys in source order, including bindings without typed models.
+func (b *ChannelBindings) BindingNames() []string {
+	if b == nil || b.low == nil {
+		return nil
+	}
+	return bindingNames(b.low.GetRootNode())
 }
 
 // Parameter represents a high-level AsyncAPI 3.0 Parameter object.

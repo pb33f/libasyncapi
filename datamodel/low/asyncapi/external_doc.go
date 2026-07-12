@@ -5,7 +5,7 @@ package asyncapi
 
 import (
 	"context"
-	"crypto/sha256"
+	"hash/maphash"
 
 	"github.com/pb33f/libopenapi/datamodel/low"
 	"github.com/pb33f/libopenapi/index"
@@ -75,22 +75,21 @@ func (e *ExternalDoc) Build(ctx context.Context, keyNode, root *yaml.Node, idx *
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash of the ExternalDoc object.
-func (e *ExternalDoc) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-
-	if !e.Description.IsEmpty() {
-		sb.WriteString(e.Description.Value)
-		sb.WriteByte('|')
-	}
-	if !e.URL.IsEmpty() {
-		sb.WriteString(e.URL.Value)
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(e.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+// Hash returns a process-local content hash of the ExternalDoc object.
+func (e *ExternalDoc) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !e.Description.IsEmpty() {
+			h.WriteString(e.Description.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !e.URL.IsEmpty() {
+			h.WriteString(e.URL.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(e.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }

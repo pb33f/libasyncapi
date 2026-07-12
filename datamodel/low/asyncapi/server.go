@@ -5,7 +5,7 @@ package asyncapi
 
 import (
 	"context"
-	"crypto/sha256"
+	"hash/maphash"
 
 	"github.com/pb33f/libopenapi/datamodel/low"
 	"github.com/pb33f/libopenapi/index"
@@ -134,70 +134,69 @@ func (s *Server) Build(ctx context.Context, keyNode, root *yaml.Node, idx *index
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash of the Server object.
-func (s *Server) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-
-	if !s.Host.IsEmpty() {
-		sb.WriteString(s.Host.Value)
-		sb.WriteByte('|')
-	}
-	if !s.Protocol.IsEmpty() {
-		sb.WriteString(s.Protocol.Value)
-		sb.WriteByte('|')
-	}
-	if !s.ProtocolVersion.IsEmpty() {
-		sb.WriteString(s.ProtocolVersion.Value)
-		sb.WriteByte('|')
-	}
-	if !s.Pathname.IsEmpty() {
-		sb.WriteString(s.Pathname.Value)
-		sb.WriteByte('|')
-	}
-	if !s.Description.IsEmpty() {
-		sb.WriteString(s.Description.Value)
-		sb.WriteByte('|')
-	}
-	if !s.Title.IsEmpty() {
-		sb.WriteString(s.Title.Value)
-		sb.WriteByte('|')
-	}
-	if !s.Summary.IsEmpty() {
-		sb.WriteString(s.Summary.Value)
-		sb.WriteByte('|')
-	}
-	if s.Variables.Value != nil {
-		for v := range orderedmap.SortAlpha(s.Variables.Value).ValuesFromOldest() {
-			sb.WriteString(low.GenerateHashString(v.Value))
-			sb.WriteByte('|')
+// Hash returns a process-local content hash of the Server object.
+func (s *Server) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !s.Host.IsEmpty() {
+			h.WriteString(s.Host.Value)
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	if s.Security.Value != nil {
-		for _, sec := range s.Security.Value {
-			sb.WriteString(low.GenerateHashString(sec.Value))
-			sb.WriteByte('|')
+		if !s.Protocol.IsEmpty() {
+			h.WriteString(s.Protocol.Value)
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	if s.Tags.Value != nil {
-		for _, tag := range s.Tags.Value {
-			sb.WriteString(low.GenerateHashString(tag.Value))
-			sb.WriteByte('|')
+		if !s.ProtocolVersion.IsEmpty() {
+			h.WriteString(s.ProtocolVersion.Value)
+			h.WriteByte(low.HASH_PIPE)
 		}
-	}
-	if !s.ExternalDocs.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(s.ExternalDocs.Value))
-		sb.WriteByte('|')
-	}
-	if !s.Bindings.IsEmpty() {
-		sb.WriteString(low.GenerateHashString(s.Bindings.Value))
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(s.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+		if !s.Pathname.IsEmpty() {
+			h.WriteString(s.Pathname.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.Description.IsEmpty() {
+			h.WriteString(s.Description.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.Title.IsEmpty() {
+			h.WriteString(s.Title.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.Summary.IsEmpty() {
+			h.WriteString(s.Summary.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if s.Variables.Value != nil {
+			for v := range orderedmap.SortAlpha(s.Variables.Value).ValuesFromOldest() {
+				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if s.Security.Value != nil {
+			for _, sec := range s.Security.Value {
+				h.WriteString(low.GenerateHashString(sec.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if s.Tags.Value != nil {
+			for _, tag := range s.Tags.Value {
+				h.WriteString(low.GenerateHashString(tag.Value))
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if !s.ExternalDocs.IsEmpty() {
+			h.WriteString(low.GenerateHashString(s.ExternalDocs.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !s.Bindings.IsEmpty() {
+			h.WriteString(low.GenerateHashString(s.Bindings.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(s.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // ServerVariable represents a low-level AsyncAPI 3.0 Server Variable object.
@@ -258,24 +257,35 @@ func (sv *ServerVariable) Build(ctx context.Context, keyNode, root *yaml.Node, i
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash of the ServerVariable object.
-func (sv *ServerVariable) Hash() [32]byte {
-	sb := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb)
-
-	if !sv.Default.IsEmpty() {
-		sb.WriteString(sv.Default.Value)
-		sb.WriteByte('|')
-	}
-	if !sv.Description.IsEmpty() {
-		sb.WriteString(sv.Description.Value)
-		sb.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(sv.Extensions) {
-		sb.WriteString(ext)
-		sb.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb.String()))
+// Hash returns a process-local content hash of the ServerVariable object.
+func (sv *ServerVariable) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if sv.Enum.Value != nil {
+			for _, v := range sv.Enum.Value {
+				h.WriteString(v.Value)
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		if !sv.Default.IsEmpty() {
+			h.WriteString(sv.Default.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !sv.Description.IsEmpty() {
+			h.WriteString(sv.Description.Value)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if sv.Examples.Value != nil {
+			for _, v := range sv.Examples.Value {
+				h.WriteString(v.Value)
+				h.WriteByte(low.HASH_PIPE)
+			}
+		}
+		for _, ext := range low.HashExtensions(sv.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }
 
 // ServerBindings represents a low-level AsyncAPI 3.0 Server Bindings object.
@@ -349,29 +359,29 @@ func (sb *ServerBindings) Build(ctx context.Context, keyNode, root *yaml.Node, i
 	return nil
 }
 
-// Hash returns a consistent SHA256 Hash.
-func (sb *ServerBindings) Hash() [32]byte {
-	sb2 := low.GetStringBuilder()
-	defer low.PutStringBuilder(sb2)
-	if !sb.HTTP.IsEmpty() {
-		sb2.WriteString(low.GenerateHashString(sb.HTTP.Value))
-		sb2.WriteByte('|')
-	}
-	if !sb.Kafka.IsEmpty() {
-		sb2.WriteString(low.GenerateHashString(sb.Kafka.Value))
-		sb2.WriteByte('|')
-	}
-	if !sb.MQTT.IsEmpty() {
-		sb2.WriteString(low.GenerateHashString(sb.MQTT.Value))
-		sb2.WriteByte('|')
-	}
-	if !sb.SQS.IsEmpty() {
-		sb2.WriteString(low.GenerateHashString(sb.SQS.Value))
-		sb2.WriteByte('|')
-	}
-	for _, ext := range low.HashExtensions(sb.Extensions) {
-		sb2.WriteString(ext)
-		sb2.WriteByte('|')
-	}
-	return sha256.Sum256([]byte(sb2.String()))
+// Hash returns a process-local content hash.
+func (sb *ServerBindings) Hash() uint64 {
+	return low.WithHasher(func(h *maphash.Hash) uint64 {
+		if !sb.HTTP.IsEmpty() {
+			h.WriteString(low.GenerateHashString(sb.HTTP.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !sb.Kafka.IsEmpty() {
+			h.WriteString(low.GenerateHashString(sb.Kafka.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !sb.MQTT.IsEmpty() {
+			h.WriteString(low.GenerateHashString(sb.MQTT.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		if !sb.SQS.IsEmpty() {
+			h.WriteString(low.GenerateHashString(sb.SQS.Value))
+			h.WriteByte(low.HASH_PIPE)
+		}
+		for _, ext := range low.HashExtensions(sb.Extensions) {
+			h.WriteString(ext)
+			h.WriteByte(low.HASH_PIPE)
+		}
+		return h.Sum64()
+	})
 }

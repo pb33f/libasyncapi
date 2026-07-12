@@ -188,3 +188,11 @@ func (b *ServerBindings) GoLow() *lowasync.ServerBindings {
 func (b *ServerBindings) GoLowUntyped() any {
 	return b.low
 }
+
+// BindingNames returns protocol binding keys in source order, including bindings without typed models.
+func (b *ServerBindings) BindingNames() []string {
+	if b == nil || b.low == nil {
+		return nil
+	}
+	return bindingNames(b.low.GetRootNode())
+}

@@ -4,6 +4,7 @@
 package libasyncapi
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"testing"
@@ -227,6 +228,34 @@ channels:
 	// Valid spec should have no errors
 	assert.Empty(t, doc.Errors(), "Valid spec should have no errors")
 	assert.False(t, doc.IsPartial(), "Valid spec should not be partial")
+}
+
+func TestDocument_InvalidReferenceOnlyFieldsProducePartialParseDiagnostics(t *testing.T) {
+	doc, err := NewDocument([]byte(`asyncapi: 3.0.0
+info:
+  title: Invalid references
+  version: 1.0.0
+channels:
+  events:
+    servers:
+      - '#/servers/scalar'
+operations:
+  receive:
+    action: receive
+    channel:
+      $ref: '#/channels/events'
+    reply:
+      channel:
+        address: inline
+`))
+
+	require.NoError(t, err)
+	require.NotNil(t, doc)
+	assert.True(t, doc.IsPartial())
+	require.NotEmpty(t, doc.Errors())
+	joined := errors.Join(doc.Errors()...).Error()
+	assert.Contains(t, joined, "channel servers entry must be a Reference Object")
+	assert.Contains(t, joined, "operation reply channel must be a Reference Object")
 }
 
 func TestDocument_Render_ReturnsModelBasedYAML(t *testing.T) {

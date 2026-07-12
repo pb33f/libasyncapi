@@ -98,7 +98,10 @@ func (o *Operation) Render() ([]byte, error) {
 // MarshalYAML will create a ready to render YAML representation of the Operation object.
 func (o *Operation) MarshalYAML() (interface{}, error) {
 	nb := high.NewNodeBuilder(o, o.low)
-	return nb.Render(), nil
+	node := nb.Render()
+	patchReferenceField(node, lowasync.ChannelLabel, []*low.Reference{o.Channel}, false)
+	patchReferenceField(node, lowasync.MessagesLabel, o.Messages, true)
+	return node, nil
 }
 
 // OperationBindings represents a high-level AsyncAPI 3.0 Operation Bindings object.
@@ -145,6 +148,14 @@ func (b *OperationBindings) GoLow() *lowasync.OperationBindings {
 // GoLowUntyped returns the low-level OperationBindings instance with no type.
 func (b *OperationBindings) GoLowUntyped() any {
 	return b.low
+}
+
+// BindingNames returns protocol binding keys in source order, including bindings without typed models.
+func (b *OperationBindings) BindingNames() []string {
+	if b == nil || b.low == nil {
+		return nil
+	}
+	return bindingNames(b.low.GetRootNode())
 }
 
 // OperationTrait represents a high-level AsyncAPI 3.0 Operation Trait object.
@@ -241,6 +252,21 @@ func (r *OperationReply) GoLow() *lowasync.OperationReply {
 // GoLowUntyped returns the low-level OperationReply instance with no type.
 func (r *OperationReply) GoLowUntyped() any {
 	return r.low
+}
+
+// Render returns a YAML representation of the Operation Reply object.
+func (r *OperationReply) Render() ([]byte, error) {
+	return yaml.Marshal(r)
+}
+
+// MarshalYAML renders reference-only fields as AsyncAPI Reference Objects and preserves
+// the source-aware ordering and extensions held by the low-level model.
+func (r *OperationReply) MarshalYAML() (interface{}, error) {
+	nb := high.NewNodeBuilder(r, r.low)
+	node := nb.Render()
+	patchReferenceField(node, lowasync.ChannelLabel, []*low.Reference{r.Channel}, false)
+	patchReferenceField(node, lowasync.MessagesLabel, r.Messages, true)
+	return node, nil
 }
 
 // OperationReplyAddress represents a high-level AsyncAPI 3.0 Operation Reply Address object.
