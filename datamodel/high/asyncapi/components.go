@@ -4,13 +4,13 @@
 package asyncapi
 
 import (
+	"github.com/pb33f/go-yaml"
+	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/high"
 	highbase "github.com/pb33f/libopenapi/datamodel/high/base"
 	"github.com/pb33f/libopenapi/datamodel/low"
 	lowbase "github.com/pb33f/libopenapi/datamodel/low/base"
-	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/orderedmap"
-	"go.yaml.in/yaml/v4"
 )
 
 // Components represents a high-level AsyncAPI 3.0 Components object.
@@ -21,26 +21,26 @@ import (
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#componentsObject
 type Components struct {
-	Schemas           *orderedmap.Map[string, *highbase.SchemaProxy]    `json:"schemas,omitempty" yaml:"schemas,omitempty"`
-	Servers           *orderedmap.Map[string, *Server]                  `json:"servers,omitempty" yaml:"servers,omitempty"`
-	Channels          *orderedmap.Map[string, *Channel]                 `json:"channels,omitempty" yaml:"channels,omitempty"`
-	Operations        *orderedmap.Map[string, *Operation]               `json:"operations,omitempty" yaml:"operations,omitempty"`
-	Messages          *orderedmap.Map[string, *Message]                 `json:"messages,omitempty" yaml:"messages,omitempty"`
-	SecuritySchemes   *orderedmap.Map[string, *SecurityScheme]          `json:"securitySchemes,omitempty" yaml:"securitySchemes,omitempty"`
-	ServerVariables   *orderedmap.Map[string, *ServerVariable]          `json:"serverVariables,omitempty" yaml:"serverVariables,omitempty"`
-	Parameters        *orderedmap.Map[string, *Parameter]               `json:"parameters,omitempty" yaml:"parameters,omitempty"`
-	CorrelationIDs    *orderedmap.Map[string, *CorrelationID]           `json:"correlationIds,omitempty" yaml:"correlationIds,omitempty"`
-	Replies           *orderedmap.Map[string, *OperationReply]          `json:"replies,omitempty" yaml:"replies,omitempty"`
-	ReplyAddresses    *orderedmap.Map[string, *OperationReplyAddress]   `json:"replyAddresses,omitempty" yaml:"replyAddresses,omitempty"`
-	ExternalDocs      *orderedmap.Map[string, *ExternalDoc]             `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
-	Tags              *orderedmap.Map[string, *Tag]                     `json:"tags,omitempty" yaml:"tags,omitempty"`
-	OperationTraits   *orderedmap.Map[string, *OperationTrait]          `json:"operationTraits,omitempty" yaml:"operationTraits,omitempty"`
-	MessageTraits     *orderedmap.Map[string, *MessageTrait]            `json:"messageTraits,omitempty" yaml:"messageTraits,omitempty"`
-	ServerBindings    *orderedmap.Map[string, *ServerBindings]          `json:"serverBindings,omitempty" yaml:"serverBindings,omitempty"`
-	ChannelBindings   *orderedmap.Map[string, *ChannelBindings]         `json:"channelBindings,omitempty" yaml:"channelBindings,omitempty"`
-	OperationBindings *orderedmap.Map[string, *OperationBindings]       `json:"operationBindings,omitempty" yaml:"operationBindings,omitempty"`
-	MessageBindings   *orderedmap.Map[string, *MessageBindings]         `json:"messageBindings,omitempty" yaml:"messageBindings,omitempty"`
-	Extensions        *orderedmap.Map[string, *yaml.Node]               `json:"-" yaml:"-"`
+	Schemas           *orderedmap.Map[string, *highbase.SchemaProxy]  `json:"schemas,omitempty" yaml:"schemas,omitempty"`
+	Servers           *orderedmap.Map[string, *Server]                `json:"servers,omitempty" yaml:"servers,omitempty"`
+	Channels          *orderedmap.Map[string, *Channel]               `json:"channels,omitempty" yaml:"channels,omitempty"`
+	Operations        *orderedmap.Map[string, *Operation]             `json:"operations,omitempty" yaml:"operations,omitempty"`
+	Messages          *orderedmap.Map[string, *Message]               `json:"messages,omitempty" yaml:"messages,omitempty"`
+	SecuritySchemes   *orderedmap.Map[string, *SecurityScheme]        `json:"securitySchemes,omitempty" yaml:"securitySchemes,omitempty"`
+	ServerVariables   *orderedmap.Map[string, *ServerVariable]        `json:"serverVariables,omitempty" yaml:"serverVariables,omitempty"`
+	Parameters        *orderedmap.Map[string, *Parameter]             `json:"parameters,omitempty" yaml:"parameters,omitempty"`
+	CorrelationIDs    *orderedmap.Map[string, *CorrelationID]         `json:"correlationIds,omitempty" yaml:"correlationIds,omitempty"`
+	Replies           *orderedmap.Map[string, *OperationReply]        `json:"replies,omitempty" yaml:"replies,omitempty"`
+	ReplyAddresses    *orderedmap.Map[string, *OperationReplyAddress] `json:"replyAddresses,omitempty" yaml:"replyAddresses,omitempty"`
+	ExternalDocs      *orderedmap.Map[string, *ExternalDoc]           `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
+	Tags              *orderedmap.Map[string, *Tag]                   `json:"tags,omitempty" yaml:"tags,omitempty"`
+	OperationTraits   *orderedmap.Map[string, *OperationTrait]        `json:"operationTraits,omitempty" yaml:"operationTraits,omitempty"`
+	MessageTraits     *orderedmap.Map[string, *MessageTrait]          `json:"messageTraits,omitempty" yaml:"messageTraits,omitempty"`
+	ServerBindings    *orderedmap.Map[string, *ServerBindings]        `json:"serverBindings,omitempty" yaml:"serverBindings,omitempty"`
+	ChannelBindings   *orderedmap.Map[string, *ChannelBindings]       `json:"channelBindings,omitempty" yaml:"channelBindings,omitempty"`
+	OperationBindings *orderedmap.Map[string, *OperationBindings]     `json:"operationBindings,omitempty" yaml:"operationBindings,omitempty"`
+	MessageBindings   *orderedmap.Map[string, *MessageBindings]       `json:"messageBindings,omitempty" yaml:"messageBindings,omitempty"`
+	Extensions        *orderedmap.Map[string, *yaml.Node]             `json:"-" yaml:"-"`
 	low               *lowasync.Components
 }
 

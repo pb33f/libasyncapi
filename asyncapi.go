@@ -51,9 +51,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/pb33f/go-yaml"
 	highasync "github.com/pb33f/libasyncapi/datamodel/high/asyncapi"
 	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
-	"go.yaml.in/yaml/v4"
 )
 
 // NewDocument will create a new AsyncAPI instance from an AsyncAPI specification []byte array.

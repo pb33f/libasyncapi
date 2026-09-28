@@ -4,9 +4,9 @@
 package asyncapi
 
 import (
+	"github.com/pb33f/go-yaml"
 	"github.com/pb33f/libopenapi/datamodel/low"
 	"github.com/pb33f/libopenapi/utils"
-	"go.yaml.in/yaml/v4"
 )
 
 // patchReferenceField replaces NodeBuilder's structural rendering of low.Reference with
