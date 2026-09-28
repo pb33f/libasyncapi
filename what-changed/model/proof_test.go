@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/pb33f/go-yaml"
 	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/low"
 	"github.com/pb33f/libopenapi/datamodel/low/base"
@@ -14,7 +15,6 @@ import (
 	wcmodel "github.com/pb33f/libopenapi/what-changed/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.yaml.in/yaml/v4"
 )
 
 func buildInfo(t *testing.T, y string) *lowasync.Info {

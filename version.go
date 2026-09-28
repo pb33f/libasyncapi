@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
-	"go.yaml.in/yaml/v4"
+	"github.com/pb33f/go-yaml"
 )
 
 // SpecInfo contains parsed version information from an AsyncAPI specification.

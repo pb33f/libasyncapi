@@ -6,9 +6,9 @@ package asyncapi
 import (
 	"testing"
 
+	"github.com/pb33f/go-yaml"
 	"github.com/pb33f/libopenapi/datamodel/low"
 	"github.com/stretchr/testify/assert"
-	"go.yaml.in/yaml/v4"
 )
 
 func TestPatchReferenceField_GuardsInvalidInputs(t *testing.T) {

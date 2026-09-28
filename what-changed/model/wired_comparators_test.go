@@ -7,12 +7,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/pb33f/go-yaml"
 	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/low"
 	"github.com/pb33f/libopenapi/index"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.yaml.in/yaml/v4"
 )
 
 func buildSQSPolicy(t *testing.T, y string) *lowasync.SQSPolicy {

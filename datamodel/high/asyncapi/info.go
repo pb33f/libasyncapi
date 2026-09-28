@@ -4,11 +4,11 @@
 package asyncapi
 
 import (
+	"github.com/pb33f/go-yaml"
+	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/high"
 	highbase "github.com/pb33f/libopenapi/datamodel/high/base"
-	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/orderedmap"
-	"go.yaml.in/yaml/v4"
 )
 
 // Info represents a high-level AsyncAPI 3.0 Info object, backed by a low-level one.
@@ -17,15 +17,15 @@ import (
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#infoObject
 type Info struct {
-	Title          string                               `json:"title,omitempty" yaml:"title,omitempty"`
-	Version        string                               `json:"version,omitempty" yaml:"version,omitempty"`
-	Description    string                               `json:"description,omitempty" yaml:"description,omitempty"`
-	TermsOfService string                               `json:"termsOfService,omitempty" yaml:"termsOfService,omitempty"`
-	Contact        *highbase.Contact                    `json:"contact,omitempty" yaml:"contact,omitempty"`
-	License        *highbase.License                    `json:"license,omitempty" yaml:"license,omitempty"`
-	Tags           []*Tag                               `json:"tags,omitempty" yaml:"tags,omitempty"`
-	ExternalDocs   *ExternalDoc                         `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
-	Extensions     *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	Title          string                              `json:"title,omitempty" yaml:"title,omitempty"`
+	Version        string                              `json:"version,omitempty" yaml:"version,omitempty"`
+	Description    string                              `json:"description,omitempty" yaml:"description,omitempty"`
+	TermsOfService string                              `json:"termsOfService,omitempty" yaml:"termsOfService,omitempty"`
+	Contact        *highbase.Contact                   `json:"contact,omitempty" yaml:"contact,omitempty"`
+	License        *highbase.License                   `json:"license,omitempty" yaml:"license,omitempty"`
+	Tags           []*Tag                              `json:"tags,omitempty" yaml:"tags,omitempty"`
+	ExternalDocs   *ExternalDoc                        `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
+	Extensions     *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low            *lowasync.Info
 }
 
@@ -83,10 +83,10 @@ func (i *Info) MarshalYAML() (interface{}, error) {
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#tagObject
 type Tag struct {
-	Name         string                               `json:"name,omitempty" yaml:"name,omitempty"`
-	Description  string                               `json:"description,omitempty" yaml:"description,omitempty"`
-	ExternalDocs *ExternalDoc                         `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
-	Extensions   *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	Name         string                              `json:"name,omitempty" yaml:"name,omitempty"`
+	Description  string                              `json:"description,omitempty" yaml:"description,omitempty"`
+	ExternalDocs *ExternalDoc                        `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
+	Extensions   *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low          *lowasync.Tag
 }
 
@@ -130,9 +130,9 @@ func (t *Tag) MarshalYAML() (interface{}, error) {
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#externalDocumentationObject
 type ExternalDoc struct {
-	Description string                               `json:"description,omitempty" yaml:"description,omitempty"`
-	URL         string                               `json:"url,omitempty" yaml:"url,omitempty"`
-	Extensions  *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	Description string                              `json:"description,omitempty" yaml:"description,omitempty"`
+	URL         string                              `json:"url,omitempty" yaml:"url,omitempty"`
+	Extensions  *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low         *lowasync.ExternalDoc
 }
 

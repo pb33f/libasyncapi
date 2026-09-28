@@ -6,10 +6,10 @@ package model
 import (
 	"reflect"
 
+	"github.com/pb33f/go-yaml"
 	"github.com/pb33f/libopenapi/datamodel/low"
 	"github.com/pb33f/libopenapi/orderedmap"
 	wcmodel "github.com/pb33f/libopenapi/what-changed/model"
-	"go.yaml.in/yaml/v4"
 )
 
 // IMPORTANT: the rule-aware helpers in this file are deliberate local re-implementations

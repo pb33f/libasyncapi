@@ -4,10 +4,10 @@
 package asyncapi
 
 import (
-	"github.com/pb33f/libopenapi/datamodel/high"
+	"github.com/pb33f/go-yaml"
 	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
+	"github.com/pb33f/libopenapi/datamodel/high"
 	"github.com/pb33f/libopenapi/orderedmap"
-	"go.yaml.in/yaml/v4"
 )
 
 // AsyncAPI represents a high-level AsyncAPI 3.0 document.
@@ -16,15 +16,15 @@ import (
 //
 //	https://www.asyncapi.com/docs/reference/specification/v3.0.0#A2SObject
 type AsyncAPI struct {
-	AsyncAPI           string                               `json:"asyncapi,omitempty" yaml:"asyncapi,omitempty"`
-	ID                 string                               `json:"id,omitempty" yaml:"id,omitempty"`
-	Info               *Info                                `json:"info,omitempty" yaml:"info,omitempty"`
-	Servers            *orderedmap.Map[string, *Server]     `json:"servers,omitempty" yaml:"servers,omitempty"`
-	DefaultContentType string                               `json:"defaultContentType,omitempty" yaml:"defaultContentType,omitempty"`
-	Channels           *orderedmap.Map[string, *Channel]    `json:"channels,omitempty" yaml:"channels,omitempty"`
-	Operations         *orderedmap.Map[string, *Operation]  `json:"operations,omitempty" yaml:"operations,omitempty"`
-	Components         *Components                          `json:"components,omitempty" yaml:"components,omitempty"`
-	Extensions         *orderedmap.Map[string, *yaml.Node]  `json:"-" yaml:"-"`
+	AsyncAPI           string                              `json:"asyncapi,omitempty" yaml:"asyncapi,omitempty"`
+	ID                 string                              `json:"id,omitempty" yaml:"id,omitempty"`
+	Info               *Info                               `json:"info,omitempty" yaml:"info,omitempty"`
+	Servers            *orderedmap.Map[string, *Server]    `json:"servers,omitempty" yaml:"servers,omitempty"`
+	DefaultContentType string                              `json:"defaultContentType,omitempty" yaml:"defaultContentType,omitempty"`
+	Channels           *orderedmap.Map[string, *Channel]   `json:"channels,omitempty" yaml:"channels,omitempty"`
+	Operations         *orderedmap.Map[string, *Operation] `json:"operations,omitempty" yaml:"operations,omitempty"`
+	Components         *Components                         `json:"components,omitempty" yaml:"components,omitempty"`
+	Extensions         *orderedmap.Map[string, *yaml.Node] `json:"-" yaml:"-"`
 	low                *lowasync.AsyncAPI
 }
 

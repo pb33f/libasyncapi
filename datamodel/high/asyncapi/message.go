@@ -4,11 +4,11 @@
 package asyncapi
 
 import (
+	"github.com/pb33f/go-yaml"
 	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/high"
 	highbase "github.com/pb33f/libopenapi/datamodel/high/base"
 	"github.com/pb33f/libopenapi/orderedmap"
-	"go.yaml.in/yaml/v4"
 )
 
 // Message represents a high-level AsyncAPI 3.0 Message object.

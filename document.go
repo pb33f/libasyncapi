@@ -4,10 +4,10 @@
 package libasyncapi
 
 import (
+	"github.com/pb33f/go-yaml"
 	highasync "github.com/pb33f/libasyncapi/datamodel/high/asyncapi"
 	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/index"
-	"go.yaml.in/yaml/v4"
 )
 
 // Document represents a parsed AsyncAPI document that can be rendered into a model or serialized.
