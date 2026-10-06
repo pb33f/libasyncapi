@@ -9,8 +9,8 @@ import (
 
 	libasyncapi "github.com/pb33f/libasyncapi"
 	"github.com/pb33f/libasyncapi/what-changed/model"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/pb33f/testify/assert"
+	"github.com/pb33f/testify/require"
 )
 
 func loadDocument(t *testing.T, path string) libasyncapi.Document {

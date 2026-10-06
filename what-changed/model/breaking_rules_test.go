@@ -6,8 +6,8 @@ package model
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/pb33f/testify/assert"
+	"github.com/pb33f/testify/require"
 )
 
 func TestGenerateDefaultBreakingRules_CachedAndComplete(t *testing.T) {
