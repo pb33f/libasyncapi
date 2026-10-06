@@ -4,8 +4,8 @@ go 1.26.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.2.1
-	github.com/pb33f/go-yaml v0.1.0
-	github.com/pb33f/libopenapi v0.41.1
+	github.com/pb33f/go-yaml v0.1.1
+	github.com/pb33f/libopenapi v0.41.2
 	github.com/stretchr/testify v1.11.1
 )
 
