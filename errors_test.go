@@ -6,7 +6,7 @@ package libasyncapi
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/pb33f/testify/assert"
 )
 
 func TestParseError_Error_WithPath(t *testing.T) {

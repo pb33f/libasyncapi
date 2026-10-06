@@ -9,8 +9,8 @@ import (
 
 	libasyncapi "github.com/pb33f/libasyncapi"
 	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/pb33f/testify/assert"
+	"github.com/pb33f/testify/require"
 )
 
 func comparisonDocument(t *testing.T, title string) *lowasync.AsyncAPI {

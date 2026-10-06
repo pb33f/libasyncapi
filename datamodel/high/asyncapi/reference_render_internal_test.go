@@ -8,7 +8,7 @@ import (
 
 	"github.com/pb33f/go-yaml"
 	"github.com/pb33f/libopenapi/datamodel/low"
-	"github.com/stretchr/testify/assert"
+	"github.com/pb33f/testify/assert"
 )
 
 func TestPatchReferenceField_GuardsInvalidInputs(t *testing.T) {

@@ -10,8 +10,8 @@ import (
 	libasyncapi "github.com/pb33f/libasyncapi"
 	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libasyncapi/what-changed/model"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/pb33f/testify/assert"
+	"github.com/pb33f/testify/require"
 )
 
 func TestCreateOverallReport_NilChanges(t *testing.T) {
