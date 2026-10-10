@@ -181,6 +181,31 @@ func (l *loader) schemaReference(from target, ref string) (target, error) {
 		_, err := t.node()
 		return t, err
 	}
+	// Load the containing resource before selecting a fragment. Its root $id
+	// also defines the scope of schemas reached through a JSON pointer.
+	document, err := l.resolve(from, u.String())
+	if err != nil {
+		return target{}, err
+	}
+	kind := "schemas"
+	if field(document.doc.root, "asyncapi") != nil {
+		kind = "root"
+	}
+	if err := l.scan(target{document.doc, ""}, kind, document.doc.uri, 0); err != nil {
+		return target{}, err
+	}
+	if frag != "" && !strings.HasPrefix(frag, "/") {
+		base := l.scopes[target{document.doc, ""}]
+		if base == "" {
+			base = document.doc.uri
+		}
+		anchor, _ := url.Parse(base)
+		anchor.Fragment = frag
+		if resolved, ok := l.resources[anchor.String()]; ok {
+			return resolved, nil
+		}
+		return target{}, fmt.Errorf("schema anchor %q not found", frag)
+	}
 	u.Fragment = frag
 	return l.resolve(from, u.String())
 }

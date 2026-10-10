@@ -198,3 +198,27 @@ func TestBundlePreservesRootReferenceChain(t *testing.T) {
 		assert.Equal(t, "#/components/schemas/B", value(t, decode(t, out), "/components/schemas/A/$ref").Value)
 	}
 }
+
+func TestBundleExternalSchemaFragmentKeepsParentScope(t *testing.T) {
+	cfg := filesConfig(map[string]string{"schema.yaml": `$id: https://schemas.example.com/container
+definitions:
+  Text: {$anchor: text, type: string}
+  Value:
+    type: object
+    properties:
+      text: {$ref: '#text'}
+`})
+	for _, composed := range []bool{false, true} {
+		spec := header + "components:\n  schemas:\n    Value: {$ref: 'schema.yaml#/definitions/Value'}\n    Text: {$ref: 'schema.yaml#text'}\n"
+		out, err := runBundle([]byte(spec), cfg, composed)
+		require.NoError(t, err)
+		e := &engine{root: decode(t, out)}
+		for _, path := range []string{"/components/schemas/Text", "/components/schemas/Value/properties/text"} {
+			n, err := e.outputTarget(path)
+			require.NoError(t, err)
+			assert.Equal(t, "string", field(n, "type").Value)
+		}
+		_, err = runBundle(out, nil, composed)
+		require.NoError(t, err)
+	}
+}
