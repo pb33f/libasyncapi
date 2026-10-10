@@ -100,6 +100,8 @@ func NewDocumentWithConfiguration(spec []byte, config *DocumentConfiguration) (D
 
 	// Convert to low-level document configuration
 	lowConfig := &lowasync.DocumentConfiguration{
+		SpecFilePath:               config.SpecFilePath,
+		ExcludeExtensionRefs:       config.ExcludeExtensionRefs,
 		BasePath:                   config.BasePath,
 		BaseURL:                    config.BaseURL,
 		AllowFileReferences:        config.AllowFileReferences,

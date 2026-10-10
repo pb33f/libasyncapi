@@ -123,6 +123,8 @@ func TestNewDocumentConfiguration(t *testing.T) {
 func TestDocumentConfiguration_ToLibOpenAPIConfig(t *testing.T) {
 	config := &DocumentConfiguration{
 		BasePath:                   "/test/path",
+		SpecFilePath:               "asyncapi.yaml",
+		ExcludeExtensionRefs:       true,
 		AllowFileReferences:        true,
 		AllowRemoteReferences:      true,
 		SkipCircularReferenceCheck: true,
@@ -130,6 +132,8 @@ func TestDocumentConfiguration_ToLibOpenAPIConfig(t *testing.T) {
 	loConfig := config.ToLibOpenAPIConfig()
 	require.NotNil(t, loConfig)
 	assert.Equal(t, "/test/path", loConfig.BasePath)
+	assert.Equal(t, "asyncapi.yaml", loConfig.SpecFilePath)
+	assert.True(t, loConfig.ExcludeExtensionRefs)
 	assert.True(t, loConfig.AllowFileReferences)
 	assert.True(t, loConfig.AllowRemoteReferences)
 	assert.True(t, loConfig.SkipCircularReferenceCheck)
