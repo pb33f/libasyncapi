@@ -5,6 +5,9 @@ package bundler
 
 import (
 	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -13,6 +16,31 @@ import (
 	"github.com/pb33f/testify/assert"
 	"github.com/pb33f/testify/require"
 )
+
+func TestBundleFileURIWithSpaces(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "spec files")
+	require.NoError(t, os.Mkdir(base, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "schema file.yaml"), []byte("type: string\n"), 0600))
+	cfg := &libasyncapi.DocumentConfiguration{BasePath: base, SpecFilePath: "root file.yaml"}
+	spec := []byte(header + "components:\n  schemas:\n    Text: {$ref: 'schema%20file.yaml'}\n")
+	root, err := parse(spec)
+	require.NoError(t, err)
+	loader, err := newLoader(root, cfg)
+	require.NoError(t, err)
+	u, err := url.Parse(loader.root.uri)
+	require.NoError(t, err)
+	assert.Empty(t, u.Host)
+	assert.Equal(t, "file", u.Scheme)
+	assert.True(t, strings.HasPrefix(u.Path, "/"))
+	for _, composed := range []bool{false, true} {
+		out, err := runBundle(spec, cfg, composed)
+		require.NoError(t, err)
+		e := &engine{root: decode(t, out)}
+		schema, err := e.outputTarget("/components/schemas/Text")
+		require.NoError(t, err)
+		assert.Equal(t, "string", field(schema, "type").Value)
+	}
+}
 
 func TestBundleReusableOperation(t *testing.T) {
 	for _, composed := range []bool{false, true} {

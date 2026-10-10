@@ -50,7 +50,12 @@ func newLoader(root *yaml.Node, config *libasyncapi.DocumentConfiguration) (*loa
 	} else if !filepath.IsAbs(rootPath) {
 		rootPath = filepath.Join(base, rootPath)
 	}
-	rootURI := (&url.URL{Scheme: "file", Path: filepath.ToSlash(rootPath)}).String()
+	uriPath := filepath.ToSlash(rootPath)
+	// A drive letter belongs in the URL path, not its authority.
+	if !strings.HasPrefix(uriPath, "/") {
+		uriPath = "/" + uriPath
+	}
+	rootURI := (&url.URL{Scheme: "file", Path: uriPath}).String()
 	if config.BaseURL != nil {
 		baseURL := *config.BaseURL
 		if !strings.HasSuffix(baseURL.Path, "/") {
@@ -80,7 +85,8 @@ func newLoader(root *yaml.Node, config *libasyncapi.DocumentConfiguration) (*loa
 		if config.LocalFS != nil {
 			rolo.AddLocalFS(base, config.LocalFS)
 		} else {
-			rolo.AddLocalFS(string(filepath.Separator), os.DirFS(string(filepath.Separator)))
+			volumeRoot := filepath.VolumeName(base) + string(filepath.Separator)
+			rolo.AddLocalFS(volumeRoot, os.DirFS(volumeRoot))
 		}
 	}
 	if cfg.AllowRemoteLookup {
@@ -237,7 +243,11 @@ func (l *loader) resolve(from target, ref string) (target, error) {
 			if u.Host != "" && u.Host != "localhost" {
 				return target{}, fmt.Errorf("unsupported file host in %q", ref)
 			}
-			location = filepath.FromSlash(u.Path)
+			path := u.Path
+			if strings.HasPrefix(path, "/") && filepath.VolumeName(path[1:]) != "" {
+				path = path[1:]
+			}
+			location = filepath.FromSlash(path)
 		case "http", "https":
 		default:
 			return target{}, fmt.Errorf("unsupported reference scheme %q", u.Scheme)
