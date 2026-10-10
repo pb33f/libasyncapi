@@ -1,0 +1,12 @@
+servers:
+  production:
+    host: broker.example.com
+    protocol: kafka
+channels:
+  orders:
+    address: orders
+    servers:
+      - $ref: '#/servers/production'
+    messages:
+      created:
+        $ref: './messages/created.yaml'

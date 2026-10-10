@@ -1,0 +1,7 @@
+Order:
+  type: object
+  properties:
+    id:
+      type: string
+    previous:
+      $ref: '#/Order'

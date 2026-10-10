@@ -21,6 +21,49 @@ AsyncAPI 2.x is intentionally unsupported.
 - Visitor-based document traversal, including schemas and protocol bindings.
 - Breaking and non-breaking change detection through `what-changed`.
 - Typed HTTP, Kafka, WebSocket, AMQP, MQTT, and SQS bindings.
+- Inline and composed AsyncAPI 3 bundling through `bundler`.
+
+## Bundling
+
+Use `github.com/pb33f/libasyncapi/bundler` to produce a portable YAML document:
+
+```go
+config := &libasyncapi.DocumentConfiguration{
+    BasePath: "/path/to/specs",
+    SpecFilePath: "asyncapi.yaml",
+    AllowFileReferences: true,
+    ExcludeExtensionRefs: true,
+}
+bundled, err := bundler.BundleBytes(spec, config)
+```
+
+`BundleBytesComposed(spec, config, &bundler.BundleCompositionConfig{Delimiter: "__"})`
+moves imported objects into AsyncAPI component sections. Collisions add the source
+file name and, when needed, a numeric suffix. Both modes preserve root-local
+references and fields that require Reference Objects. Cycles use local references.
+Operation messages continue to reference their channel's messages; operations and
+channel servers continue to reference the required root locations. Ambiguous
+external targets return an error instead of adding active channels or servers.
+
+The bundler reads the source tree directly and does not require a typed model.
+It preserves comments, key order, explicit empty values, examples, bindings, and
+multi-format schema content. YAML aliases and merge keys are expanded. It does not
+validate the complete AsyncAPI contract or merge traits. Input bytes and
+configuration are not modified. An error returns no output, including when a
+reference cannot be loaded.
+
+Remote loading requires `AllowRemoteReferences`. `LocalFS` and `RemoteURLHandler`
+can supply custom sources. `SpecFilePath` identifies the entry document for
+references back to it. A nonempty `BasePath` enables local loading, as it does for
+the parser. Set `ExcludeExtensionRefs` to keep `$ref` values in extensions as data;
+example values are always treated as data.
+
+Schema resource IDs and anchors are resolved before relocation and removed from
+the output so local references use the bundled document's scope. Non-JSON schema
+content is preserved without interpreting language-specific imports. Circular YAML
+aliases, multiple YAML documents, and dynamic or recursive JSON Schema reference
+keywords return errors. These features need separate semantics and are not silently
+expanded.
 
 ## Install
 

@@ -15,6 +15,13 @@ import (
 
 // DocumentConfiguration holds configuration options for parsing AsyncAPI documents.
 type DocumentConfiguration struct {
+	// SpecFilePath identifies the entry file, allowing references back to it.
+	// Relative paths are resolved against BasePath.
+	SpecFilePath string
+
+	// ExcludeExtensionRefs leaves $ref values inside x-* extensions untouched.
+	ExcludeExtensionRefs bool
+
 	// BasePath is the base path for resolving relative file references.
 	// If empty, the current working directory is used.
 	BasePath string
@@ -67,6 +74,8 @@ func (c *DocumentConfiguration) ToLibOpenAPIConfig() *datamodel.DocumentConfigur
 	}
 
 	return &datamodel.DocumentConfiguration{
+		SpecFilePath:               c.SpecFilePath,
+		ExcludeExtensionRefs:       c.ExcludeExtensionRefs,
 		BasePath:                   c.BasePath,
 		BaseURL:                    c.BaseURL,
 		AllowFileReferences:        c.AllowFileReferences,

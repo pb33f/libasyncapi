@@ -1,0 +1,12 @@
+# The order event.
+name: OrderCreated
+payload:
+  $ref: '../schemas.yaml#/Order'
+examples:
+  - payload:
+      $ref: literal-payload.yaml
+bindings:
+  kafka:
+    key:
+      type: string
+    bindingVersion: 0.5.0

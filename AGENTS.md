@@ -47,6 +47,7 @@ datamodel/low/asyncapi/           low-level YAML-aware models
 datamodel/low/asyncapi/constants.go field labels
 datamodel/low/asyncapi/create_document.go document builder and index setup
 visitor/                          visitor interfaces, walker, context helpers
+bundler/                          AsyncAPI inline/composed bundling on source nodes
 test_fixtures/                    integration and binding fixtures
 ```
 
@@ -170,6 +171,11 @@ tags, keyNode, valueNode, err := low.ExtractArray[*Tag](ctx, "tags", root, idx)
 ```
 
 ## Rendering Rules
+
+The `bundler` package owns AsyncAPI reference placement. It uses libopenapi's
+public Rolodex APIs for loading, without changes to libopenapi. Keep its output
+tree separate from parsed source nodes. Test portable output with external
+loading disabled, including required operation/channel/message/server links.
 
 - High-level `MarshalYAML()` should use `high.NewNodeBuilder(value, value.low)`
   when low-level metadata must be preserved.

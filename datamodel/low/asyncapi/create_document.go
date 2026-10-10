@@ -34,6 +34,12 @@ type RemoteURLHandler = func(url string) (*http.Response, error)
 
 // DocumentConfiguration provides options for loading and parsing AsyncAPI documents.
 type DocumentConfiguration struct {
+	// SpecFilePath identifies the entry file for references back to the root.
+	SpecFilePath string
+
+	// ExcludeExtensionRefs skips references inside x-* extensions.
+	ExcludeExtensionRefs bool
+
 	// BasePath is the base path for resolving relative file references.
 	BasePath string
 
@@ -97,6 +103,8 @@ func CreateDocumentWithConfig(rootNode *yaml.Node, config *DocumentConfiguration
 	// Create index configuration
 	idxConfig := index.CreateClosedAPIIndexConfig()
 	idxConfig.SkipDocumentCheck = true // AsyncAPI documents don't have openapi/swagger fields
+	idxConfig.SpecFilePath = config.SpecFilePath
+	idxConfig.ExcludeExtensionRefs = config.ExcludeExtensionRefs
 	idxConfig.AvoidCircularReferenceCheck = config.SkipCircularReferenceCheck
 	idxConfig.ExtractRefsSequentially = config.ExtractRefsSequentially
 
