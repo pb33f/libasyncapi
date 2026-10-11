@@ -58,8 +58,15 @@ references back to it. A nonempty `BasePath` enables local loading, as it does f
 the parser. Set `ExcludeExtensionRefs` to keep `$ref` values in extensions as data;
 example values are always treated as data.
 
+`BasePath` is a starting directory, not a file access boundary: parent paths and
+absolute file references can read outside it, and their contents enter the bundle.
+For untrusted input, supply a `LocalFS` that enforces the required boundary
+(including symlink access). Referenced scalar documents are rejected except for
+boolean schemas.
+
 Schema resource IDs and anchors are resolved before relocation and removed from
-the output so local references use the bundled document's scope. Non-JSON schema
+the output so local references use the bundled document's scope. OpenAPI-format
+schemas also resolve their references. Non-JSON schema
 content is preserved without interpreting language-specific imports. Circular YAML
 aliases, multiple YAML documents, and dynamic or recursive JSON Schema reference
 keywords return errors. These features need separate semantics and are not silently

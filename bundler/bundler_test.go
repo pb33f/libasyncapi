@@ -111,8 +111,9 @@ func TestBundleEveryComponentCategory(t *testing.T) {
 			result, err := BundleBytesComposed(spec, cfg, nil)
 			require.NoError(t, err)
 			n := decode(t, result)
-			assert.Equal(t, "#/components/"+kind+"/object", value(t, n, "/components/"+kind+"/imported/$ref").Value)
-			assert.Equal(t, "retained", value(t, n, "/components/"+kind+"/object/description").Value)
+			assert.Nil(t, field(value(t, n, "/components/"+kind+"/imported"), "$ref"))
+			assert.Equal(t, "retained", value(t, n, "/components/"+kind+"/imported/description").Value)
+			assert.Len(t, value(t, n, "/components/"+kind).Content, 2)
 		})
 	}
 }

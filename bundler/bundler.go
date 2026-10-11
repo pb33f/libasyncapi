@@ -105,6 +105,11 @@ func bundle(spec []byte, config *libasyncapi.DocumentConfiguration, composed boo
 	if components := field(input.Content[0], "components"); components != nil {
 		set(e.root, "components", clone(components))
 	}
+	if composed {
+		if err := e.reserveComponentTargets(); err != nil {
+			return nil, err
+		}
+	}
 	result, err := e.walk(target{l.root, ""}, "", "root", 0)
 	if err != nil {
 		return nil, err
@@ -138,7 +143,7 @@ func bundle(spec []byte, config *libasyncapi.DocumentConfiguration, composed boo
 	output.Content = []*yaml.Node{result}
 	var buffer bytes.Buffer
 	encoder := yaml.NewEncoder(&buffer)
-	encoder.SetIndent(indentation(spec))
+	encoder.SetIndent(indentation(input))
 	if err := encoder.Encode(&output); err != nil {
 		return nil, err
 	}
@@ -155,9 +160,6 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 	n, err := src.node()
 	if err != nil {
 		return nil, err
-	}
-	if n.Kind == yaml.AliasNode {
-		return nil, fmt.Errorf("YAML aliases are not supported at #%s", dest)
 	}
 	if kind == "opaque" {
 		return clone(n), nil
@@ -177,21 +179,7 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 		if ref.Kind != yaml.ScalarNode || ref.Tag != "!!str" || ref.Value == "" {
 			return nil, fmt.Errorf("invalid $ref at %s#%s", src.doc.uri, src.pointer)
 		}
-		var resolved target
-		if kind == "schemas" {
-			resolved, err = e.loader.schemaReference(src, ref.Value)
-		} else {
-			resolved, err = e.loader.resolve(src, ref.Value)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("%s#%s: %w", src.doc.uri, src.pointer, err)
-		}
-		// Reject reference-only loops before treating any local reference as safe.
-		if kind != "schemas" {
-			resolved, err = e.loader.terminal(resolved)
-		} else {
-			resolved, err = e.schemaTerminal(resolved)
-		}
+		resolved, err := e.resolveReference(src, kind, ref.Value)
 		if err != nil {
 			return nil, err
 		}
@@ -221,7 +209,7 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 		if path, ok := e.active[resolved]; ok {
 			return reference(n, localRef(path)), nil
 		}
-		if e.composed && componentKind(kind) {
+		if e.composed && componentKind(kind) && e.components[componentKey{resolved, kind}] != dest {
 			path, err := e.compose(resolved, kind, depth+1)
 			if err != nil {
 				return nil, err
@@ -245,7 +233,7 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 		seen := make(map[string]bool, len(n.Content)/2)
 		for i := 0; i < len(n.Content); i += 2 {
 			key := n.Content[i]
-			if key.Kind != yaml.ScalarNode || key.Tag != "!!str" || seen[key.Value] {
+			if key.Kind != yaml.ScalarNode || seen[key.Value] {
 				return nil, fmt.Errorf("invalid or duplicate key at #%s", dest)
 			}
 			seen[key.Value] = true
@@ -289,6 +277,58 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 		}
 	}
 	return &out, nil
+}
+
+func (e *engine) resolveReference(src target, kind, ref string) (target, error) {
+	var resolved target
+	var err error
+	if kind == "schemas" {
+		resolved, err = e.loader.schemaReference(src, ref)
+	} else {
+		resolved, err = e.loader.resolve(src, ref)
+	}
+	if err != nil {
+		return target{}, fmt.Errorf("%s#%s: %w", src.doc.uri, src.pointer, err)
+	}
+	// Reject reference-only loops before treating any local reference as safe.
+	if kind == "schemas" {
+		return e.schemaTerminal(resolved)
+	}
+	return e.loader.terminal(resolved)
+}
+
+// Reserve explicit component destinations before walking uses that may precede
+// them in the document. The first bare external reference owns the target.
+func (e *engine) reserveComponentTargets() error {
+	components := field(e.loader.root.root, "components")
+	if components == nil || components.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i < len(components.Content); i += 2 {
+		kind, bucket := components.Content[i].Value, components.Content[i+1]
+		if !componentKind(kind) || bucket.Kind != yaml.MappingNode {
+			continue
+		}
+		for j := 0; j < len(bucket.Content); j += 2 {
+			n := bucket.Content[j+1]
+			ref := field(n, "$ref")
+			if len(n.Content) != 2 || ref == nil || ref.Kind != yaml.ScalarNode || ref.Tag != "!!str" || ref.Value == "" || strings.HasPrefix(ref.Value, "#") {
+				continue
+			}
+			path := "/components/" + kind + "/" + escape(bucket.Content[j].Value)
+			t, err := e.resolveReference(target{e.loader.root, path}, kind, ref.Value)
+			if err != nil {
+				return err
+			}
+			if t.doc != e.loader.root {
+				key := componentKey{t, kind}
+				if _, exists := e.components[key]; !exists {
+					e.components[key] = path
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (e *engine) schemaTerminal(t target) (target, error) {
