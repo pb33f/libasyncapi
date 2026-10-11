@@ -269,6 +269,9 @@ func (l *loader) resolve(from target, ref string) (target, error) {
 		if n.Kind == yaml.DocumentNode {
 			n = n.Content[0]
 		}
+		if n.Kind == yaml.ScalarNode && n.Tag != "!!bool" {
+			return target{}, fmt.Errorf("reference document %q must contain an object, array, or boolean schema", uri)
+		}
 		doc = &source{uri, n}
 		l.documents[uri] = doc
 	}

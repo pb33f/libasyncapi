@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"mime"
 	"net/url"
 	"path"
 	"strconv"
@@ -138,14 +139,34 @@ func componentName(t target) string {
 	}
 	return name
 }
-func indentation(spec []byte) int {
-	for _, line := range strings.Split(string(spec), "\n") {
-		n := len(line) - len(strings.TrimLeft(line, " "))
-		if n > 0 && strings.TrimSpace(line) != "" && !strings.HasPrefix(strings.TrimSpace(line), "#") {
-			return n
+func indentation(root *yaml.Node) int {
+	indent := 0
+	var visit func(*yaml.Node)
+	visit = func(n *yaml.Node) {
+		if n.Style&yaml.FlowStyle != 0 || n.Kind == yaml.ScalarNode {
+			return
+		}
+		if n.Kind == yaml.MappingNode {
+			for i := 0; i < len(n.Content); i += 2 {
+				key, value := n.Content[i], n.Content[i+1]
+				if (value.Kind == yaml.MappingNode || value.Kind == yaml.SequenceNode) && value.Style&yaml.FlowStyle == 0 && value.Line > key.Line {
+					if delta := value.Column - key.Column; delta > 0 && (indent == 0 || delta < indent) {
+						indent = delta
+					}
+				}
+				visit(value)
+			}
+			return
+		}
+		for _, child := range n.Content {
+			visit(child)
 		}
 	}
-	return 2
+	visit(root)
+	if indent == 0 {
+		return 2
+	}
+	return indent
 }
 
 func componentKind(kind string) bool {
@@ -269,7 +290,17 @@ func validDelimiter(s string) bool {
 }
 
 func jsonSchemaFormat(format string) bool {
-	return strings.Contains(format, "asyncapi") || strings.HasPrefix(format, "application/schema+json") || strings.HasPrefix(format, "application/schema+yaml")
+	mediaType, _, err := mime.ParseMediaType(format)
+	if err != nil {
+		return false
+	}
+	switch mediaType {
+	case "application/vnd.aai.asyncapi+json", "application/vnd.aai.asyncapi+yaml",
+		"application/schema+json", "application/schema+yaml",
+		"application/vnd.oai.openapi", "application/vnd.oai.openapi+json", "application/vnd.oai.openapi+yaml":
+		return true
+	}
+	return false
 }
 
 func parse(data []byte) (*yaml.Node, error) {
@@ -283,16 +314,19 @@ func parse(data []byte) (*yaml.Node, error) {
 		return nil, fmt.Errorf("expected one YAML document")
 	}
 	budget := 1_000_000
-	return expandAliases(&root, make(map[*yaml.Node]bool), 0, &budget)
+	return expandAliases(&root, make(map[*yaml.Node]bool), 0, &budget, false)
 }
 
-func expandAliases(n *yaml.Node, active map[*yaml.Node]bool, depth int, budget *int) (*yaml.Node, error) {
-	*budget--
-	if depth > 512 || *budget < 0 {
-		return nil, fmt.Errorf("document expansion limit exceeded")
-	}
+func expandAliases(n *yaml.Node, active map[*yaml.Node]bool, depth int, budget *int, aliased bool) (*yaml.Node, error) {
 	if n.Kind == yaml.AliasNode {
 		n = n.Alias
+		aliased = true
+	}
+	if aliased {
+		*budget--
+	}
+	if depth > 512 || *budget < 0 {
+		return nil, fmt.Errorf("document expansion limit exceeded")
 	}
 	if active[n] {
 		return nil, fmt.Errorf("circular YAML alias at line %d", n.Line)
@@ -304,7 +338,7 @@ func expandAliases(n *yaml.Node, active map[*yaml.Node]bool, depth int, budget *
 	out.Alias = nil
 	out.Content = make([]*yaml.Node, len(n.Content))
 	for i, child := range n.Content {
-		value, err := expandAliases(child, active, depth+1, budget)
+		value, err := expandAliases(child, active, depth+1, budget, aliased)
 		if err != nil {
 			return nil, err
 		}
