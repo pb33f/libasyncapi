@@ -4,10 +4,7 @@
 package bundler
 
 import (
-	"bytes"
 	"fmt"
-	"io"
-	"mime"
 	"net/url"
 	"path"
 	"strconv"
@@ -15,6 +12,8 @@ import (
 	"unicode"
 
 	"github.com/pb33f/go-yaml"
+	"github.com/pb33f/libasyncapi/internal/schemaformat"
+	"github.com/pb33f/libasyncapi/internal/yamlparse"
 	"github.com/pb33f/libopenapi/utils"
 )
 
@@ -28,6 +27,11 @@ func field(n *yaml.Node, key string) *yaml.Node {
 		}
 	}
 	return nil
+}
+
+// referenceOnly separates a foreign schema import from schema metadata named $ref.
+func referenceOnly(n *yaml.Node) bool {
+	return n.Kind == yaml.MappingNode && len(n.Content) == 2 && field(n, "$ref") != nil
 }
 func scalar(value string) *yaml.Node {
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
@@ -274,12 +278,21 @@ func childKind(parent, key string) string {
 		}
 	}
 	if strings.HasSuffix(parent, "Bindings") {
-		return "binding"
+		return "binding:" + key
 	}
-	if parent == "binding" {
+	if strings.HasPrefix(parent, "binding:") {
 		switch key {
 		case "schema", "headers", "query", "key":
 			return "schemas"
+		}
+		if parent == "binding:kafka" && (key == "groupId" || key == "clientId") {
+			return "schemas"
+		}
+		if parent == "binding:mqtt" {
+			switch key {
+			case "correlationData", "responseTopic", "sessionExpiryInterval", "maximumPacketSize", "messageExpiryInterval":
+				return "schemas"
+			}
 		}
 	}
 	return "opaque"
@@ -290,31 +303,16 @@ func validDelimiter(s string) bool {
 }
 
 func jsonSchemaFormat(format string) bool {
-	mediaType, _, err := mime.ParseMediaType(format)
-	if err != nil {
-		return false
-	}
-	switch mediaType {
-	case "application/vnd.aai.asyncapi+json", "application/vnd.aai.asyncapi+yaml",
-		"application/schema+json", "application/schema+yaml",
-		"application/vnd.oai.openapi", "application/vnd.oai.openapi+json", "application/vnd.oai.openapi+yaml":
-		return true
-	}
-	return false
+	return schemaformat.IsJSON(format)
 }
 
 func parse(data []byte) (*yaml.Node, error) {
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	var root yaml.Node
-	if err := decoder.Decode(&root); err != nil {
+	root, err := yamlparse.Parse(data)
+	if err != nil {
 		return nil, err
 	}
-	var extra yaml.Node
-	if err := decoder.Decode(&extra); err != io.EOF {
-		return nil, fmt.Errorf("expected one YAML document")
-	}
 	budget := 1_000_000
-	return expandAliases(&root, make(map[*yaml.Node]bool), 0, &budget, false)
+	return expandAliases(root, make(map[*yaml.Node]bool), 0, &budget, false)
 }
 
 func expandAliases(n *yaml.Node, active map[*yaml.Node]bool, depth int, budget *int, aliased bool) (*yaml.Node, error) {

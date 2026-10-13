@@ -110,7 +110,7 @@ func newLoader(root *yaml.Node, config *libasyncapi.DocumentConfiguration) (*loa
 // scan registers schema resources without interpreting examples or payloads in
 // other languages. References are resolved only when the bundler visits them.
 func (l *loader) scan(t target, kind, base string, depth int) error {
-	if kind == "opaque" {
+	if kind == "opaque" || kind == "schemaContent" {
 		return nil
 	}
 	if depth > 512 {
@@ -149,7 +149,7 @@ func (l *loader) scan(t target, kind, base string, depth int) error {
 			key := n.Content[i].Value
 			child := childKind(kind, key)
 			if kind == "schemas" && key == "schema" && field(n, "schemaFormat") != nil && !jsonSchemaFormat(field(n, "schemaFormat").Value) {
-				child = "opaque"
+				child = "schemaContent"
 			}
 			if err := l.scan(target{t.doc, t.pointer + "/" + escape(key)}, child, base, depth+1); err != nil {
 				return err
@@ -269,9 +269,6 @@ func (l *loader) resolve(from target, ref string) (target, error) {
 		if n.Kind == yaml.DocumentNode {
 			n = n.Content[0]
 		}
-		if n.Kind == yaml.ScalarNode && n.Tag != "!!bool" {
-			return target{}, fmt.Errorf("reference document %q must contain an object, array, or boolean schema", uri)
-		}
 		doc = &source{uri, n}
 		l.documents[uri] = doc
 	}
@@ -285,7 +282,7 @@ func (l *loader) resolve(from target, ref string) (target, error) {
 			return target{}, err
 		}
 		if r := field(n, "$ref"); r != nil && r.Kind == yaml.ScalarNode && r.Tag == "!!str" {
-			t, err = l.terminal(t)
+			t, err = l.terminal(t, false)
 			if err != nil {
 				return target{}, err
 			}
@@ -298,8 +295,10 @@ func (l *loader) resolve(from target, ref string) (target, error) {
 	return t, nil
 }
 
-func (l *loader) terminal(t target) (target, error) {
-	if cached, ok := l.resolved[t]; ok {
+// bareOnly preserves metadata inside foreign schemas. Those results must not
+// share the cache used when every $ref field is interpreted as a reference.
+func (l *loader) terminal(t target, bareOnly bool) (target, error) {
+	if cached, ok := l.resolved[t]; ok && !bareOnly {
 		return cached, nil
 	}
 	seen := make(map[target]bool)
@@ -313,9 +312,14 @@ func (l *loader) terminal(t target) (target, error) {
 			return target{}, err
 		}
 		r := field(n, "$ref")
+		if bareOnly && !referenceOnly(n) {
+			r = nil
+		}
 		if r == nil {
-			for start := range seen {
-				l.resolved[start] = t
+			if !bareOnly {
+				for start := range seen {
+					l.resolved[start] = t
+				}
 			}
 			return t, nil
 		}

@@ -42,7 +42,9 @@ moves imported objects into AsyncAPI component sections. Collisions add the sour
 file name and, when needed, a numeric suffix. Both modes preserve root-local
 references and fields that require Reference Objects. Cycles use local references.
 Operation messages continue to reference their channel's messages; operations and
-channel servers continue to reference the required root locations. Ambiguous
+channel servers continue to reference the required root locations. Inline mode
+emits each shared external schema once and uses local references for later uses
+to prevent exponential output growth. Ambiguous
 external targets return an error instead of adding active channels or servers.
 
 The bundler reads the source tree directly and does not require a typed model.
@@ -62,15 +64,24 @@ example values are always treated as data.
 absolute file references can read outside it, and their contents enter the bundle.
 For untrusted input, supply a `LocalFS` that enforces the required boundary
 (including symlink access). Referenced scalar documents are rejected except for
-boolean schemas.
+boolean schemas and content inside a Multi Format Schema Object.
 
 Schema resource IDs and anchors are resolved before relocation and removed from
 the output so local references use the bundled document's scope. OpenAPI-format
-schemas also resolve their references. Non-JSON schema
-content is preserved without interpreting language-specific imports. Circular YAML
-aliases, multiple YAML documents, and dynamic or recursive JSON Schema reference
+schemas also resolve their references. A Reference Object in the `schema` field
+of a Multi Format Schema Object loads the referenced JSON or YAML value, including
+Avro records, unions, and primitive types. The bundler preserves the schema content
+without interpreting language-specific imports or nested data as JSON Schema.
+Kafka `groupId` and `clientId`, and MQTT schema-valued fields, also resolve their
+references. Circular YAML aliases, multiple YAML documents, and dynamic or recursive JSON Schema reference
 keywords return errors. These features need separate semantics and are not silently
 expanded.
+
+The document parser resolves message pointers through channel Reference Objects,
+including composed bundles, while retaining the original source nodes. Successful
+alias repairs are removed from `Document.Errors()`; raw index diagnostics remain
+available through libopenapi's index accessors. JSON input uses JSON string and
+whitespace semantics and retains source line and column positions.
 
 ## Install
 
