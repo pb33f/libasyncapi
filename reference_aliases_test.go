@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/pb33f/go-yaml"
+	"github.com/pb33f/libopenapi/index"
 	"github.com/pb33f/testify/assert"
 	"github.com/pb33f/testify/require"
 )
@@ -131,4 +132,49 @@ components:
 	doc, err = NewDocument(missing)
 	require.NoError(t, err)
 	assert.NotEmpty(t, doc.Errors())
+}
+
+func TestForeignComponentSchemaRetainsSourceNodes(t *testing.T) {
+	for _, used := range []bool{false, true} {
+		t.Run(fmt.Sprint(used), func(t *testing.T) {
+			source := `asyncapi: 3.1.0
+info: {title: Events, version: '1'}
+components:
+  schemas:
+    Event:
+      schemaFormat: application/vnd.apache.avro+json
+      schema: {type: record, name: Event, fields: []}
+`
+			if used {
+				source += "channels: {c: {messages: {m: {payload: {$ref: '#/components/schemas/Event'}}}}}\n"
+			}
+			doc, err := NewDocument([]byte(source))
+			require.NoError(t, err)
+			require.Empty(t, doc.Errors())
+			original := doc.RootNode().Content[0].Content[5].Content[1].Content[1]
+			lookup := doc.Index().FindComponentInRoot(t.Context(), "#/components/schemas/Event")
+			require.NotNil(t, lookup)
+			assert.Same(t, original, lookup.Node)
+			for _, refs := range [][]*index.Reference{doc.Index().GetAllSchemas(), doc.Index().GetAllInlineSchemaObjects()} {
+				for _, ref := range refs {
+					if ref.Node.Line == original.Line {
+						assert.Same(t, original, ref.Node)
+					}
+				}
+			}
+			require.Len(t, doc.Index().GetAllComponentSchemas(), 1)
+			for _, ref := range doc.Index().GetAllComponentSchemas() {
+				assert.Same(t, original, ref.Node)
+			}
+			if used {
+				message := doc.Model().Channels.GetOrZero("c").Messages.GetOrZero("m")
+				assert.Same(t, original, message.GoLow().Payload.ValueNode)
+				assert.Same(t, original, message.Payload.GoLow().GetValueNode())
+				assert.Same(t, original, message.Payload.Schema().GoLow().GetRootNode())
+				encoded, err := yaml.Marshal(message.GoLow().Payload.ValueNode)
+				require.NoError(t, err)
+				assert.Contains(t, string(encoded), "type: record")
+			}
+		})
+	}
 }

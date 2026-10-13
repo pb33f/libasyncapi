@@ -93,6 +93,14 @@ func restoreIndexSources(rolodex *index.Rolodex, root *yaml.Node, originals map[
 		for _, ref := range idx.GetRawReferencesSequenced() {
 			restore(ref)
 		}
+		for _, ref := range idx.GetAllComponentSchemas() {
+			restore(ref)
+		}
+		for _, refs := range [][]*index.Reference{idx.GetAllInlineSchemas(), idx.GetAllInlineSchemaObjects(), idx.GetAllReferenceSchemas()} {
+			for _, ref := range refs {
+				restore(ref)
+			}
+		}
 	}
 	rolodex.GetRootIndex().SetRootNode(root)
 	rolodex.SetRootNode(root)
