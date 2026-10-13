@@ -14,6 +14,9 @@ import (
 
 	"github.com/pb33f/go-yaml"
 	"github.com/pb33f/libasyncapi"
+	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
+	"github.com/pb33f/libasyncapi/internal/yamlparse"
+	lowbase "github.com/pb33f/libopenapi/datamodel/low/base"
 	"github.com/pb33f/libopenapi/index"
 )
 
@@ -46,7 +49,7 @@ func newLoader(root *yaml.Node, config *libasyncapi.DocumentConfiguration) (*loa
 	}
 	rootPath := config.SpecFilePath
 	if rootPath == "" {
-		rootPath = filepath.Join(base, "__asyncapi_entry__.yaml")
+		rootPath = filepath.Join(base, defaultEntryFile)
 	} else if !filepath.IsAbs(rootPath) {
 		rootPath = filepath.Join(base, rootPath)
 	}
@@ -55,7 +58,7 @@ func newLoader(root *yaml.Node, config *libasyncapi.DocumentConfiguration) (*loa
 	if !strings.HasPrefix(uriPath, "/") {
 		uriPath = "/" + uriPath
 	}
-	rootURI := (&url.URL{Scheme: "file", Path: uriPath}).String()
+	rootURI := (&url.URL{Scheme: fileScheme, Path: uriPath}).String()
 	if config.BaseURL != nil {
 		baseURL := *config.BaseURL
 		if !strings.HasSuffix(baseURL.Path, "/") {
@@ -80,7 +83,7 @@ func newLoader(root *yaml.Node, config *libasyncapi.DocumentConfiguration) (*loa
 	// The loader owns the source tree. No typed model is built, which avoids
 	// discarding unsupported schema formats and does not eagerly fetch examples.
 	rolo.SetRootNode(root)
-	rolo.SetRootIndex(index.NewSpecIndexWithConfig(&yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}, cfg))
+	rolo.SetRootIndex(index.NewSpecIndexWithConfig(&yaml.Node{Kind: yaml.MappingNode, Tag: yamlparse.MappingTag}, cfg))
 	if cfg.AllowFileLookup {
 		if config.LocalFS != nil {
 			rolo.AddLocalFS(base, config.LocalFS)
@@ -97,11 +100,11 @@ func newLoader(root *yaml.Node, config *libasyncapi.DocumentConfiguration) (*loa
 		if config.RemoteURLHandler != nil {
 			remote.RemoteHandlerFunc = config.RemoteURLHandler
 		}
-		rolo.AddRemoteFS("default", remote)
+		rolo.AddRemoteFS(defaultRemoteFS, remote)
 	}
 	src := &source{rootURI, root.Content[0]}
 	l := &loader{root: src, rolodex: rolo, documents: map[string]*source{rootURI: src}, resolved: make(map[target]target), resources: make(map[string]target), scopes: make(map[target]string), scanned: make(map[target]bool)}
-	if err := l.scan(target{src, ""}, "root", src.uri, 0); err != nil {
+	if err := l.scan(target{src, ""}, kindRoot, src.uri, 0); err != nil {
 		return nil, err
 	}
 	return l, nil
@@ -110,7 +113,7 @@ func newLoader(root *yaml.Node, config *libasyncapi.DocumentConfiguration) (*loa
 // scan registers schema resources without interpreting examples or payloads in
 // other languages. References are resolved only when the bundler visits them.
 func (l *loader) scan(t target, kind, base string, depth int) error {
-	if kind == "opaque" || kind == "schemaContent" {
+	if kind == kindOpaque || kind == kindSchemaContent {
 		return nil
 	}
 	if depth > 512 {
@@ -120,12 +123,12 @@ func (l *loader) scan(t target, kind, base string, depth int) error {
 	if err != nil {
 		return err
 	}
-	if kind == "schemas" {
+	if kind == lowasync.SchemasLabel {
 		if l.scanned[t] {
 			return nil
 		}
 		l.scanned[t] = true
-		if id := field(n, "$id"); id != nil {
+		if id := field(n, lowbase.IdLabel); id != nil {
 			u, err := url.Parse(id.Value)
 			if err != nil {
 				return err
@@ -138,7 +141,7 @@ func (l *loader) scan(t target, kind, base string, depth int) error {
 			l.resources[base] = t
 		}
 		l.scopes[t] = base
-		if anchor := field(n, "$anchor"); anchor != nil {
+		if anchor := field(n, lowbase.AnchorLabel); anchor != nil {
 			u, _ := url.Parse(base)
 			u.Fragment = anchor.Value
 			l.resources[u.String()] = t
@@ -148,8 +151,8 @@ func (l *loader) scan(t target, kind, base string, depth int) error {
 		for i := 0; i < len(n.Content); i += 2 {
 			key := n.Content[i].Value
 			child := childKind(kind, key)
-			if kind == "schemas" && key == "schema" && field(n, "schemaFormat") != nil && !jsonSchemaFormat(field(n, "schemaFormat").Value) {
-				child = "schemaContent"
+			if kind == lowasync.SchemasLabel && key == lowasync.SchemaLabel && field(n, lowasync.SchemaFormatLabel) != nil && !jsonSchemaFormat(field(n, lowasync.SchemaFormatLabel).Value) {
+				child = kindSchemaContent
 			}
 			if err := l.scan(target{t.doc, t.pointer + "/" + escape(key)}, child, base, depth+1); err != nil {
 				return err
@@ -157,7 +160,7 @@ func (l *loader) scan(t target, kind, base string, depth int) error {
 		}
 	} else if n.Kind == yaml.SequenceNode {
 		for i := range n.Content {
-			if err := l.scan(target{t.doc, fmt.Sprintf("%s/%d", t.pointer, i)}, strings.TrimPrefix(kind, "list:"), base, depth+1); err != nil {
+			if err := l.scan(target{t.doc, fmt.Sprintf("%s/%d", t.pointer, i)}, strings.TrimPrefix(kind, listKindPrefix), base, depth+1); err != nil {
 				return err
 			}
 		}
@@ -193,9 +196,9 @@ func (l *loader) schemaReference(from target, ref string) (target, error) {
 	if err != nil {
 		return target{}, err
 	}
-	kind := "schemas"
-	if field(document.doc.root, "asyncapi") != nil {
-		kind = "root"
+	kind := lowasync.SchemasLabel
+	if field(document.doc.root, lowasync.AsyncAPILabel) != nil {
+		kind = kindRoot
 	}
 	if err := l.scan(target{document.doc, ""}, kind, document.doc.uri, 0); err != nil {
 		return target{}, err
@@ -239,8 +242,8 @@ func (l *loader) resolve(from target, ref string) (target, error) {
 	if doc == nil {
 		location := uri
 		switch u.Scheme {
-		case "file":
-			if u.Host != "" && u.Host != "localhost" {
+		case fileScheme:
+			if u.Host != "" && u.Host != localFileHost {
 				return target{}, fmt.Errorf("unsupported file host in %q", ref)
 			}
 			path := u.Path
@@ -248,7 +251,7 @@ func (l *loader) resolve(from target, ref string) (target, error) {
 				path = path[1:]
 			}
 			location = filepath.FromSlash(path)
-		case "http", "https":
+		case httpScheme, httpsScheme:
 		default:
 			return target{}, fmt.Errorf("unsupported reference scheme %q", u.Scheme)
 		}
@@ -281,7 +284,7 @@ func (l *loader) resolve(from target, ref string) (target, error) {
 		if err != nil {
 			return target{}, err
 		}
-		if r := field(n, "$ref"); r != nil && r.Kind == yaml.ScalarNode && r.Tag == "!!str" {
+		if r := field(n, lowasync.RefLabel); r != nil && r.Kind == yaml.ScalarNode && r.Tag == yamlparse.StringTag {
 			t, err = l.terminal(t, false)
 			if err != nil {
 				return target{}, err
@@ -311,7 +314,7 @@ func (l *loader) terminal(t target, bareOnly bool) (target, error) {
 		if err != nil {
 			return target{}, err
 		}
-		r := field(n, "$ref")
+		r := field(n, lowasync.RefLabel)
 		if bareOnly && !referenceOnly(n) {
 			r = nil
 		}
@@ -323,7 +326,7 @@ func (l *loader) terminal(t target, bareOnly bool) (target, error) {
 			}
 			return t, nil
 		}
-		if r.Kind != yaml.ScalarNode || r.Tag != "!!str" || r.Value == "" {
+		if r.Kind != yaml.ScalarNode || r.Tag != yamlparse.StringTag || r.Value == "" {
 			return target{}, fmt.Errorf("invalid $ref at %s#%s", t.doc.uri, t.pointer)
 		}
 		t, err = l.resolve(t, r.Value)

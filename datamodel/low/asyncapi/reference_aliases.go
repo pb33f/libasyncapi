@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/pb33f/go-yaml"
+	"github.com/pb33f/libasyncapi/internal/yamlparse"
 	"github.com/pb33f/libopenapi/index"
 )
 
@@ -183,8 +184,8 @@ func pointerChild(node *yaml.Node, token string) *yaml.Node {
 }
 
 func referenceField(node *yaml.Node) string {
-	ref := pointerChild(node, "$ref")
-	if ref != nil && ref.Kind == yaml.ScalarNode && ref.Tag == "!!str" {
+	ref := pointerChild(node, RefLabel)
+	if ref != nil && ref.Kind == yaml.ScalarNode && ref.Tag == yamlparse.StringTag {
 		return ref.Value
 	}
 	return ""
