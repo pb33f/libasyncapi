@@ -51,9 +51,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/pb33f/go-yaml"
 	highasync "github.com/pb33f/libasyncapi/datamodel/high/asyncapi"
 	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
+	"github.com/pb33f/libasyncapi/internal/yamlparse"
 )
 
 // NewDocument will create a new AsyncAPI instance from an AsyncAPI specification []byte array.
@@ -79,14 +79,14 @@ func NewDocumentWithConfiguration(spec []byte, config *DocumentConfiguration) (D
 	}
 
 	// Parse YAML
-	var rootNode yaml.Node
-	if err := yaml.Unmarshal(spec, &rootNode); err != nil {
+	rootNode, err := yamlparse.Parse(spec)
+	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidYAML, err)
 	}
-	doc.rootNode = &rootNode
+	doc.rootNode = rootNode
 
 	// Extract and validate version
-	version, err := ExtractVersionFromNode(&rootNode)
+	version, err := ExtractVersionFromNode(rootNode)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func NewDocumentWithConfiguration(spec []byte, config *DocumentConfiguration) (D
 	}
 
 	// Build low-level document
-	lowDoc, buildErr := lowasync.CreateDocumentWithConfig(&rootNode, lowConfig)
+	lowDoc, buildErr := lowasync.CreateDocumentWithConfig(rootNode, lowConfig)
 	if buildErr != nil {
 		// Check if it's a multi-error
 		var docErr *lowasync.DocumentBuildError

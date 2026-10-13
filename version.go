@@ -8,6 +8,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/pb33f/go-yaml"
+	"github.com/pb33f/libasyncapi/internal/yamlparse"
 )
 
 // SpecInfo contains parsed version information from an AsyncAPI specification.
@@ -26,11 +27,11 @@ func cleanVersionString(version string) string {
 // It returns the version string and any error encountered.
 // If the specification is AsyncAPI 2.x, it returns ErrAsyncAPI2NotSupported.
 func DetectAsyncAPIVersion(spec []byte) (string, error) {
-	var rootNode yaml.Node
-	if err := yaml.Unmarshal(spec, &rootNode); err != nil {
+	rootNode, err := yamlparse.Parse(spec)
+	if err != nil {
 		return "", ErrInvalidYAML
 	}
-	return ExtractVersionFromNode(&rootNode)
+	return ExtractVersionFromNode(rootNode)
 }
 
 // ExtractVersionFromNode extracts the asyncapi version from an already-parsed YAML node.

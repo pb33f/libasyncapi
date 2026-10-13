@@ -66,6 +66,7 @@ type engine struct {
 	imports           []componentImport
 	pending           []pendingReference
 	aliases           map[string][]string
+	inlineSchemas     map[target]string
 }
 
 type componentKey struct {
@@ -99,6 +100,7 @@ func bundle(spec []byte, config *libasyncapi.DocumentConfiguration, composed boo
 	e := &engine{loader: l, composed: composed, delimiter: delimiter,
 		excludeExtensions: cfg.ExcludeExtensionRefs, active: make(map[target]string), components: make(map[componentKey]string)}
 	e.aliases = make(map[string][]string)
+	e.inlineSchemas = make(map[target]string)
 	e.placements = make(map[target][]string)
 	// Reserve all existing component names before imports are allocated.
 	e.root = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
@@ -161,7 +163,9 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 	if err != nil {
 		return nil, err
 	}
-	if kind == "opaque" {
+	// Resolve the outer Reference Object of a foreign schema, but do not
+	// interpret its contents as JSON Schema once the resource is loaded.
+	if kind == "opaque" || (kind == "schemaContent" && !referenceOnly(n)) {
 		return clone(n), nil
 	}
 	if (strings.HasPrefix(kind, "map:") || kind == "components" || (componentKind(kind) && kind != "schemas")) && n.Kind != yaml.MappingNode {
@@ -183,6 +187,13 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 		if err != nil {
 			return nil, err
 		}
+		resolvedNode, err := resolved.node()
+		if err != nil {
+			return nil, err
+		}
+		if kind != "schemaContent" && resolved.pointer == "" && resolvedNode.Kind == yaml.ScalarNode && resolvedNode.Tag != "!!bool" {
+			return nil, fmt.Errorf("reference target %s#%s must contain an object, array, or boolean schema", resolved.doc.uri, resolved.pointer)
+		}
 		if strings.HasPrefix(kind, "ref:") {
 			out := reference(n, ref.Value)
 			preferred := ""
@@ -200,14 +211,26 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 		}
 		if src.doc == e.loader.root && strings.HasPrefix(ref.Value, "#") && (kind != "schemas" || e.loader.scopes[src] == src.doc.uri) {
 			e.placements[resolved] = append(e.placements[resolved], dest)
-			if kind != "schemas" && resolved.doc == e.loader.root && resolved.pointer != dest {
-				e.aliases[resolved.pointer] = append(e.aliases[resolved.pointer], dest)
+			if kind != "schemas" {
+				// Preserve the local alias even when its terminal target is external.
+				local, _ := fragment(ref.Value)
+				if local != dest {
+					e.aliases[local] = append(e.aliases[local], dest)
+				}
 			}
 			return reference(n, ref.Value), nil
 		}
 		e.placements[resolved] = append(e.placements[resolved], dest)
 		if path, ok := e.active[resolved]; ok {
 			return reference(n, localRef(path)), nil
+		}
+		if !e.composed && kind == "schemas" {
+			// Emit each external schema once. Shared graphs otherwise expand
+			// exponentially even though they contain no reference cycle.
+			if path, ok := e.inlineSchemas[resolved]; ok {
+				return reference(n, localRef(path)), nil
+			}
+			e.inlineSchemas[resolved] = dest
 		}
 		if e.composed && componentKind(kind) && e.components[componentKey{resolved, kind}] != dest {
 			path, err := e.compose(resolved, kind, depth+1)
@@ -249,7 +272,7 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 			}
 			if kind == "schemas" && field(n, "schemaFormat") != nil && key.Value == "schema" {
 				format := field(n, "schemaFormat").Value
-				childKind = "opaque"
+				childKind = "schemaContent"
 				if jsonSchemaFormat(format) {
 					childKind = "schemas"
 				}
@@ -294,7 +317,7 @@ func (e *engine) resolveReference(src target, kind, ref string) (target, error) 
 	if kind == "schemas" {
 		return e.schemaTerminal(resolved)
 	}
-	return e.loader.terminal(resolved)
+	return e.loader.terminal(resolved, kind == "schemaContent")
 }
 
 // Reserve explicit component destinations before walking uses that may precede

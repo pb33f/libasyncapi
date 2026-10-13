@@ -105,7 +105,8 @@ func CreateDocumentWithConfig(rootNode *yaml.Node, config *DocumentConfiguration
 	idxConfig.SkipDocumentCheck = true // AsyncAPI documents don't have openapi/swagger fields
 	idxConfig.SpecFilePath = config.SpecFilePath
 	idxConfig.ExcludeExtensionRefs = config.ExcludeExtensionRefs
-	idxConfig.AvoidCircularReferenceCheck = config.SkipCircularReferenceCheck
+	// Register AsyncAPI aliases before the resolver visits their dependents.
+	idxConfig.AvoidCircularReferenceCheck = true
 	idxConfig.ExtractRefsSequentially = config.ExtractRefsSequentially
 
 	// Handle base URL
@@ -119,7 +120,8 @@ func CreateDocumentWithConfig(rootNode *yaml.Node, config *DocumentConfiguration
 
 	// Create rolodex for reference resolution
 	rolodex := index.NewRolodex(idxConfig)
-	rolodex.SetRootNode(rootNode)
+	indexRoot, originalNodes := schemaIndexView(rootNode)
+	rolodex.SetRootNode(indexRoot)
 	doc.Rolodex = rolodex
 
 	// If basePath is provided, add a local filesystem to the rolodex
@@ -183,11 +185,19 @@ func CreateDocumentWithConfig(rootNode *yaml.Node, config *DocumentConfiguration
 		config.Logger.Debug("rolodex indexed", "ms", time.Since(now).Milliseconds())
 	}
 
+	repairedAliases := repairReferenceAliases(rolodex)
 	if !config.SkipCircularReferenceCheck {
 		if config.Logger != nil {
 			config.Logger.Debug("checking for circular references")
 		}
 		circNow := time.Now()
+		for _, idx := range rolodex.GetIndexes() {
+			if resolver := idx.GetResolver(); resolver != nil {
+				for _, issue := range resolver.CheckForCircularReferences() {
+					errs = append(errs, issue)
+				}
+			}
+		}
 		rolodex.CheckForCircularReferences()
 		if config.Logger != nil {
 			config.Logger.Debug("circular check completed", "ms", time.Since(circNow).Milliseconds())
@@ -199,6 +209,8 @@ func CreateDocumentWithConfig(rootNode *yaml.Node, config *DocumentConfiguration
 	if roloErrs != nil {
 		errs = append(errs, roloErrs...)
 	}
+	errs = removeRepairedAliasErrors(errs, repairedAliases)
+	restoreIndexSources(rolodex, rootNode, originalNodes)
 
 	// Set root index
 	doc.Index = rolodex.GetRootIndex()

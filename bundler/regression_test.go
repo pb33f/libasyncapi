@@ -250,3 +250,127 @@ definitions:
 		require.NoError(t, err)
 	}
 }
+
+func TestBundleRootChannelThroughExternalComponent(t *testing.T) {
+	files := map[string]string{
+		"reusable/channels.yaml": `lights:
+  address: lights/{id}
+  parameters:
+    id: {description: light id}
+  messages:
+    on: {$ref: './messages.yaml#/on'}
+    off: {$ref: './messages.yaml#/off'}
+replies:
+  address: replies
+  messages:
+    off: {$ref: './messages.yaml#/off'}
+`,
+		"reusable/messages.yaml":   "on: {name: on, payload: {type: object, properties: {cmd: {const: 'on'}}}}\noff: {name: off, payload: {type: object, properties: {cmd: {const: 'off'}}}}\n",
+		"reusable/operations.yaml": "turnOn:\n  action: send\n  channel: {$ref: './channels.yaml#/lights'}\n  messages: [{$ref: './channels.yaml#/lights/messages/on'}]\n",
+	}
+	channels := "channels:\n  lights: {$ref: '#/components/channels/lights'}\n  replies: {$ref: '#/components/channels/replies'}\n"
+	components := "components:\n  channels:\n    lights: {$ref: './reusable/channels.yaml#/lights'}\n    replies: {$ref: './reusable/channels.yaml#/replies'}\n"
+	reusable := "operations:\n  turnOn: {$ref: '#/components/operations/turnOn'}\n"
+	reusableRefs := map[string]string{
+		"/operations/turnOn":                       "#/components/operations/turnOn",
+		"/components/operations/turnOn/channel":    "#/channels/lights",
+		"/components/operations/turnOn/messages/0": "#/channels/lights/messages/on",
+	}
+	tests := []struct {
+		name, operations, components string
+		refs                         map[string]string
+	}{
+		{"operation", `operations:
+  turnOn:
+    action: send
+    channel: {$ref: '#/channels/lights'}
+    messages: [{$ref: '#/channels/lights/messages/on'}]
+`, "", map[string]string{
+			"/operations/turnOn/channel":    "#/channels/lights",
+			"/operations/turnOn/messages/0": "#/channels/lights/messages/on",
+		}},
+		{"reply", `operations:
+  turnOn:
+    action: send
+    channel: {$ref: '#/channels/lights'}
+    reply:
+      channel: {$ref: '#/channels/replies'}
+      messages: [{$ref: '#/channels/replies/messages/off'}]
+`, "", map[string]string{
+			"/operations/turnOn/channel":          "#/channels/lights",
+			"/operations/turnOn/reply/channel":    "#/channels/replies",
+			"/operations/turnOn/reply/messages/0": "#/channels/replies/messages/off",
+		}},
+		{"componentOperation", reusable, `  operations:
+    turnOn:
+      action: send
+      channel: {$ref: '#/channels/lights'}
+      messages: [{$ref: '#/channels/lights/messages/on'}]
+`, reusableRefs},
+		{"externalComponentOperation", reusable, "  operations:\n    turnOn: {$ref: './reusable/operations.yaml#/turnOn'}\n", reusableRefs},
+	}
+	for _, tt := range tests {
+		for _, composed := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/%t", tt.name, composed), func(t *testing.T) {
+				out, err := runBundle([]byte(header+channels+tt.operations+components+tt.components), filesConfig(files), composed)
+				require.NoError(t, err)
+				n := decode(t, out)
+				for p, want := range tt.refs {
+					assert.Equal(t, want, value(t, n, p+"/$ref").Value, p)
+				}
+				assert.Equal(t, "#/components/channels/lights", value(t, n, "/channels/lights/$ref").Value)
+				assert.Equal(t, "#/components/channels/replies", value(t, n, "/channels/replies/$ref").Value)
+				assert.Equal(t, "lights/{id}", value(t, n, "/components/channels/lights/address").Value)
+				assert.Equal(t, "light id", value(t, n, "/components/channels/lights/parameters/id/description").Value)
+				assert.Equal(t, "replies", value(t, n, "/components/channels/replies/address").Value)
+				if composed {
+					assert.Equal(t, "#/components/messages/on", value(t, n, "/components/channels/lights/messages/on/$ref").Value)
+				} else {
+					assert.Equal(t, "on", value(t, n, "/components/channels/lights/messages/on/payload/properties/cmd/const").Value)
+				}
+				e := &engine{root: n}
+				for p, want := range map[string]string{"/channels/lights/messages/on": "on", "/channels/lights/messages/off": "off", "/channels/replies/messages/off": "off"} {
+					message, err := e.outputTarget(p)
+					require.NoError(t, err)
+					assert.Equal(t, want, field(message, "name").Value, p)
+				}
+				assert.NotContains(t, string(out), ".yaml")
+				again, err := runBundle(out, nil, composed)
+				require.NoError(t, err)
+				assert.Equal(t, string(out), string(again))
+			})
+		}
+	}
+}
+
+func TestBundleExternalComponentChannelAmbiguity(t *testing.T) {
+	files := map[string]string{
+		"channel.yaml": "address: a\nmessages:\n  on: {$ref: message.yaml}\n  again: {$ref: message.yaml}\n",
+		"message.yaml": "name: on\n",
+	}
+	shared := "channels:\n  a: {$ref: '#/components/channels/shared'}\n  b: {$ref: '#/components/channels/shared'}\n"
+	component := "components:\n  channels:\n    shared: {$ref: channel.yaml}\n"
+	tests := []struct{ name, spec, want string }{
+		{"sharedComponent", shared + "operations: {send: {action: send, channel: {$ref: channel.yaml}}}\n" + component, "#/operations/send/channel: expected one local channels target, found 2"},
+		{"componentReference", shared + "operations: {send: {action: send, channel: {$ref: '#/components/channels/shared'}}}\n" + component, "#/operations/send/channel: expected one local channels target, found 2"},
+		{"twoComponents", "channels:\n  a: {$ref: '#/components/channels/x'}\n  b: {$ref: '#/components/channels/y'}\noperations: {send: {action: send, channel: {$ref: channel.yaml}}}\ncomponents:\n  channels:\n    x: {$ref: channel.yaml}\n    y: {$ref: channel.yaml}\n", "#/operations/send/channel: expected one local channels target, found 2"},
+		{"messages", shared + "operations: {send: {action: send, channel: {$ref: '#/channels/a'}, messages: [{$ref: message.yaml}]}}\n" + component, "#/operations/send/messages/0: expected one local messages target, found 2"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, composed := range []bool{false, true} {
+				out, err := runBundle([]byte(header+tt.spec), filesConfig(files), composed)
+				require.ErrorContains(t, err, tt.want)
+				assert.Nil(t, out)
+			}
+		})
+	}
+	// Explicit root references still select one of the shared uses.
+	for _, composed := range []bool{false, true} {
+		out, err := runBundle([]byte(header+shared+"operations: {send: {action: send, channel: {$ref: '#/channels/b'}, messages: [{$ref: '#/channels/b/messages/again'}]}}\n"+component), filesConfig(files), composed)
+		require.NoError(t, err)
+		n := decode(t, out)
+		assert.Equal(t, "#/channels/b", value(t, n, "/operations/send/channel/$ref").Value)
+		assert.Equal(t, "#/channels/b/messages/again", value(t, n, "/operations/send/messages/0/$ref").Value)
+	}
+}
