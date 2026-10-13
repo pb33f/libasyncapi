@@ -6,6 +6,7 @@ package asyncapi
 import (
 	"github.com/pb33f/go-yaml"
 	"github.com/pb33f/libasyncapi/internal/schemaformat"
+	"github.com/pb33f/libasyncapi/internal/yamlparse"
 	"github.com/pb33f/libopenapi/index"
 )
 
@@ -17,15 +18,15 @@ func schemaIndexView(root *yaml.Node) (*yaml.Node, map[*yaml.Node]*yaml.Node) {
 	visit = func(node *yaml.Node, path []string) *yaml.Node {
 		foreign := false
 		if multiFormatLocation(path) {
-			format := pointerChild(node, "schemaFormat")
+			format := pointerChild(node, SchemaFormatLabel)
 			foreign = format != nil && !schemaformat.IsJSON(format.Value)
 		}
 		var content []*yaml.Node
 		for i, child := range node.Content {
 			var next *yaml.Node
-			if foreign && i%2 == 1 && node.Content[i-1].Value == "schema" && !(child.Kind == yaml.MappingNode && len(child.Content) == 2 && pointerChild(child, "$ref") != nil) {
+			if foreign && i%2 == 1 && node.Content[i-1].Value == SchemaLabel && !(child.Kind == yaml.MappingNode && len(child.Content) == 2 && pointerChild(child, RefLabel) != nil) {
 				masked := *child
-				masked.Kind, masked.Tag, masked.Value, masked.Content = yaml.ScalarNode, "!!str", "", nil
+				masked.Kind, masked.Tag, masked.Value, masked.Content = yaml.ScalarNode, yamlparse.StringTag, "", nil
 				masked.Alias = nil
 				next = &masked
 				originals[next] = child
@@ -55,16 +56,16 @@ func schemaIndexView(root *yaml.Node) (*yaml.Node, map[*yaml.Node]*yaml.Node) {
 }
 
 func multiFormatLocation(path []string) bool {
-	if len(path) == 3 && path[0] == "components" && path[1] == "schemas" {
+	if len(path) == 3 && path[0] == ComponentsLabel && path[1] == SchemasLabel {
 		return true
 	}
-	if len(path) == 4 && path[0] == "components" && path[1] == "messages" && path[3] == "payload" {
+	if len(path) == 4 && path[0] == ComponentsLabel && path[1] == MessagesLabel && path[3] == PayloadLabel {
 		return true
 	}
-	if len(path) > 0 && path[0] == "components" {
+	if len(path) > 0 && path[0] == ComponentsLabel {
 		path = path[1:]
 	}
-	return len(path) == 5 && path[0] == "channels" && path[2] == "messages" && path[4] == "payload"
+	return len(path) == 5 && path[0] == ChannelsLabel && path[2] == MessagesLabel && path[4] == PayloadLabel
 }
 
 // restoreIndexSources publishes original nodes after reference scanning finishes.

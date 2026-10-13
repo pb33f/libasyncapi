@@ -15,6 +15,14 @@ import (
 	"github.com/pb33f/go-yaml"
 )
 
+const (
+	jsonSeparators   = " \t\r\n:,"
+	jsonFloatMarkers = ".eE"
+	jsonTrue         = "true"
+	jsonFalse        = "false"
+	jsonNull         = "null"
+)
+
 // Parse reads one document. Valid JSON uses the standard JSON decoder so JSON
 // escapes and whitespace retain their meaning. Nodes keep source positions.
 func Parse(data []byte) (*yaml.Node, error) {
@@ -50,7 +58,7 @@ func (p *jsonNodes) value(depth int) (*yaml.Node, error) {
 		return nil, fmt.Errorf("JSON nesting limit exceeded")
 	}
 	start := int(p.decoder.InputOffset())
-	for start < len(p.data) && strings.ContainsRune(" \t\r\n:,", rune(p.data[start])) {
+	for start < len(p.data) && strings.ContainsRune(jsonSeparators, rune(p.data[start])) {
 		start++
 	}
 	for p.offset < start {
@@ -71,9 +79,9 @@ func (p *jsonNodes) value(depth int) (*yaml.Node, error) {
 	case json.Delim:
 		node.Style = yaml.FlowStyle
 		if value == '{' {
-			node.Kind, node.Tag = yaml.MappingNode, "!!map"
+			node.Kind, node.Tag = yaml.MappingNode, MappingTag
 		} else {
-			node.Kind, node.Tag = yaml.SequenceNode, "!!seq"
+			node.Kind, node.Tag = yaml.SequenceNode, SequenceTag
 		}
 		for p.decoder.More() {
 			child, err := p.value(depth + 1)
@@ -93,19 +101,19 @@ func (p *jsonNodes) value(depth int) (*yaml.Node, error) {
 			return nil, err
 		}
 	case string:
-		node.Tag, node.Style, node.Value = "!!str", yaml.DoubleQuotedStyle, value
+		node.Tag, node.Style, node.Value = StringTag, yaml.DoubleQuotedStyle, value
 	case json.Number:
-		node.Tag, node.Value = "!!int", string(value)
-		if strings.ContainsAny(string(value), ".eE") {
-			node.Tag = "!!float"
+		node.Tag, node.Value = IntegerTag, string(value)
+		if strings.ContainsAny(string(value), jsonFloatMarkers) {
+			node.Tag = FloatTag
 		}
 	case bool:
-		node.Tag, node.Value = "!!bool", "false"
+		node.Tag, node.Value = BooleanTag, jsonFalse
 		if value {
-			node.Value = "true"
+			node.Value = jsonTrue
 		}
 	case nil:
-		node.Tag, node.Value = "!!null", "null"
+		node.Tag, node.Value = NullTag, jsonNull
 	}
 	return node, nil
 }

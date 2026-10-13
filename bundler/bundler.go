@@ -11,6 +11,9 @@ import (
 
 	"github.com/pb33f/go-yaml"
 	"github.com/pb33f/libasyncapi"
+	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
+	"github.com/pb33f/libasyncapi/internal/yamlparse"
+	"github.com/pb33f/libopenapi/datamodel/low/base"
 )
 
 // BundleCompositionConfig controls component names in composed output.
@@ -24,14 +27,14 @@ type BundleCompositionConfig struct {
 // local references. On failure no output is returned. Input and configuration
 // are not modified. Output is YAML, including when the input is JSON.
 func BundleBytes(spec []byte, config *libasyncapi.DocumentConfiguration) ([]byte, error) {
-	return bundle(spec, config, false, "__")
+	return bundle(spec, config, false, defaultDelimiter)
 }
 
 // BundleBytesComposed places external objects in their AsyncAPI component
 // sections and rewrites references to local targets. Reference-only fields keep
 // the channel, message and server locations required by AsyncAPI.
 func BundleBytesComposed(spec []byte, config *libasyncapi.DocumentConfiguration, composition *BundleCompositionConfig) ([]byte, error) {
-	delimiter := "__"
+	delimiter := defaultDelimiter
 	if composition != nil && composition.Delimiter != "" {
 		delimiter = composition.Delimiter
 	}
@@ -103,16 +106,16 @@ func bundle(spec []byte, config *libasyncapi.DocumentConfiguration, composed boo
 	e.inlineSchemas = make(map[target]string)
 	e.placements = make(map[target][]string)
 	// Reserve all existing component names before imports are allocated.
-	e.root = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-	if components := field(input.Content[0], "components"); components != nil {
-		set(e.root, "components", clone(components))
+	e.root = &yaml.Node{Kind: yaml.MappingNode, Tag: yamlparse.MappingTag}
+	if components := field(input.Content[0], lowasync.ComponentsLabel); components != nil {
+		set(e.root, lowasync.ComponentsLabel, clone(components))
 	}
 	if composed {
 		if err := e.reserveComponentTargets(); err != nil {
 			return nil, err
 		}
 	}
-	result, err := e.walk(target{l.root, ""}, "", "root", 0)
+	result, err := e.walk(target{l.root, ""}, "", kindRoot, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +127,7 @@ func bundle(spec []byte, config *libasyncapi.DocumentConfiguration, composed boo
 		if err != nil {
 			return nil, err
 		}
-		if p.role == "messages" || rootUse || !strings.HasPrefix(p.path, "/components/") || len(e.placements[p.target]) > 0 {
+		if p.role == lowasync.MessagesLabel || rootUse || !strings.HasPrefix(p.path, componentsPathPrefix) || len(e.placements[p.target]) > 0 {
 			continue
 		}
 		if _, err := e.compose(p.target, p.role, 0); err != nil {
@@ -134,7 +137,7 @@ func bundle(spec []byte, config *libasyncapi.DocumentConfiguration, composed boo
 	// Imported components were collected separately so traversal never sees its
 	// own output as input and root key order remains stable.
 	for _, item := range e.imports {
-		components := ensureMap(result, "components")
+		components := ensureMap(result, lowasync.ComponentsLabel)
 		set(ensureMap(components, item.kind), item.name, item.node)
 	}
 	e.root = result
@@ -165,22 +168,22 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 	}
 	// Resolve the outer Reference Object of a foreign schema, but do not
 	// interpret its contents as JSON Schema once the resource is loaded.
-	if kind == "opaque" || (kind == "schemaContent" && !referenceOnly(n)) {
+	if kind == kindOpaque || (kind == kindSchemaContent && !referenceOnly(n)) {
 		return clone(n), nil
 	}
-	if (strings.HasPrefix(kind, "map:") || kind == "components" || (componentKind(kind) && kind != "schemas")) && n.Kind != yaml.MappingNode {
+	if (strings.HasPrefix(kind, mapKindPrefix) || kind == lowasync.ComponentsLabel || (componentKind(kind) && kind != lowasync.SchemasLabel)) && n.Kind != yaml.MappingNode {
 		return nil, fmt.Errorf("#%s: %s requires an object", dest, kind)
 	}
-	if strings.HasPrefix(kind, "list:") && n.Kind != yaml.SequenceNode {
+	if strings.HasPrefix(kind, listKindPrefix) && n.Kind != yaml.SequenceNode {
 		return nil, fmt.Errorf("#%s requires an array", dest)
 	}
-	if kind == "schemas" {
+	if kind == lowasync.SchemasLabel {
 		if err := e.loader.scan(src, kind, src.doc.uri, 0); err != nil {
 			return nil, err
 		}
 	}
-	if ref := field(n, "$ref"); ref != nil && !strings.HasPrefix(kind, "map:") && kind != "root" && kind != "components" {
-		if ref.Kind != yaml.ScalarNode || ref.Tag != "!!str" || ref.Value == "" {
+	if ref := field(n, lowasync.RefLabel); ref != nil && !strings.HasPrefix(kind, mapKindPrefix) && kind != kindRoot && kind != lowasync.ComponentsLabel {
+		if ref.Kind != yaml.ScalarNode || ref.Tag != yamlparse.StringTag || ref.Value == "" {
 			return nil, fmt.Errorf("invalid $ref at %s#%s", src.doc.uri, src.pointer)
 		}
 		resolved, err := e.resolveReference(src, kind, ref.Value)
@@ -191,27 +194,27 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 		if err != nil {
 			return nil, err
 		}
-		if kind != "schemaContent" && resolved.pointer == "" && resolvedNode.Kind == yaml.ScalarNode && resolvedNode.Tag != "!!bool" {
+		if kind != kindSchemaContent && resolved.pointer == "" && resolvedNode.Kind == yaml.ScalarNode && resolvedNode.Tag != yamlparse.BooleanTag {
 			return nil, fmt.Errorf("reference target %s#%s must contain an object, array, or boolean schema", resolved.doc.uri, resolved.pointer)
 		}
-		if strings.HasPrefix(kind, "ref:") {
+		if strings.HasPrefix(kind, refKindPrefix) {
 			out := reference(n, ref.Value)
 			preferred := ""
 			if src.doc == e.loader.root && strings.HasPrefix(ref.Value, "#") {
 				preferred, _ = fragment(ref.Value)
 			}
-			e.pending = append(e.pending, pendingReference{out, resolved, dest, strings.TrimPrefix(kind, "ref:"), preferred})
+			e.pending = append(e.pending, pendingReference{out, resolved, dest, strings.TrimPrefix(kind, refKindPrefix), preferred})
 			return out, nil
 		}
-		if kind == "schemas" && src.doc == e.loader.root && e.loader.scopes[src] == src.doc.uri && strings.HasPrefix(ref.Value, "#/") {
+		if kind == lowasync.SchemasLabel && src.doc == e.loader.root && e.loader.scopes[src] == src.doc.uri && strings.HasPrefix(ref.Value, "#/") {
 			return reference(n, ref.Value), nil
 		}
-		if kind == "schemas" && resolved.doc == e.loader.root {
+		if kind == lowasync.SchemasLabel && resolved.doc == e.loader.root {
 			return reference(n, localRef(resolved.pointer)), nil
 		}
-		if src.doc == e.loader.root && strings.HasPrefix(ref.Value, "#") && (kind != "schemas" || e.loader.scopes[src] == src.doc.uri) {
+		if src.doc == e.loader.root && strings.HasPrefix(ref.Value, "#") && (kind != lowasync.SchemasLabel || e.loader.scopes[src] == src.doc.uri) {
 			e.placements[resolved] = append(e.placements[resolved], dest)
-			if kind != "schemas" {
+			if kind != lowasync.SchemasLabel {
 				// Preserve the local alias even when its terminal target is external.
 				local, _ := fragment(ref.Value)
 				if local != dest {
@@ -224,7 +227,7 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 		if path, ok := e.active[resolved]; ok {
 			return reference(n, localRef(path)), nil
 		}
-		if !e.composed && kind == "schemas" {
+		if !e.composed && kind == lowasync.SchemasLabel {
 			// Emit each external schema once. Shared graphs otherwise expand
 			// exponentially even though they contain no reference cycle.
 			if path, ok := e.inlineSchemas[resolved]; ok {
@@ -245,7 +248,7 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 		delete(e.active, resolved)
 		return out, err
 	}
-	if strings.HasPrefix(kind, "ref:") {
+	if strings.HasPrefix(kind, refKindPrefix) {
 		return nil, fmt.Errorf("#%s requires a Reference Object", dest)
 	}
 	e.placements[src] = append(e.placements[src], dest)
@@ -260,26 +263,26 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 				return nil, fmt.Errorf("invalid or duplicate key at #%s", dest)
 			}
 			seen[key.Value] = true
-			if kind == "schemas" && (key.Value == "$id" || key.Value == "$anchor") {
+			if kind == lowasync.SchemasLabel && (key.Value == base.IdLabel || key.Value == base.AnchorLabel) {
 				continue
 			}
 			childKind := childKind(kind, key.Value)
-			if strings.HasPrefix(key.Value, "x-") && !strings.HasPrefix(kind, "map:") {
-				childKind = "extension"
+			if strings.HasPrefix(key.Value, extensionPrefix) && !strings.HasPrefix(kind, mapKindPrefix) {
+				childKind = kindExtension
 				if e.excludeExtensions {
-					childKind = "opaque"
+					childKind = kindOpaque
 				}
 			}
-			if kind == "schemas" && field(n, "schemaFormat") != nil && key.Value == "schema" {
-				format := field(n, "schemaFormat").Value
-				childKind = "schemaContent"
+			if kind == lowasync.SchemasLabel && field(n, lowasync.SchemaFormatLabel) != nil && key.Value == lowasync.SchemaLabel {
+				format := field(n, lowasync.SchemaFormatLabel).Value
+				childKind = kindSchemaContent
 				if jsonSchemaFormat(format) {
-					childKind = "schemas"
+					childKind = lowasync.SchemasLabel
 				}
 			}
 			// A schema resource changes reference scope. Until its relocation can
 			// be proven safe, fail rather than silently change its meaning.
-			if kind == "schemas" && (key.Value == "$dynamicRef" || key.Value == "$recursiveRef") {
+			if kind == lowasync.SchemasLabel && (key.Value == base.DynamicRefLabel || key.Value == recursiveRefLabel) {
 				return nil, fmt.Errorf("schema keyword %s at #%s requires resource-aware bundling", key.Value, dest)
 			}
 			segment := "/" + escape(key.Value)
@@ -292,7 +295,7 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 	} else if n.Kind == yaml.SequenceNode {
 		for i := range n.Content {
 			segment := fmt.Sprintf("/%d", i)
-			child, err := e.walk(target{src.doc, src.pointer + segment}, dest+segment, strings.TrimPrefix(kind, "list:"), depth+1)
+			child, err := e.walk(target{src.doc, src.pointer + segment}, dest+segment, strings.TrimPrefix(kind, listKindPrefix), depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -305,7 +308,7 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 func (e *engine) resolveReference(src target, kind, ref string) (target, error) {
 	var resolved target
 	var err error
-	if kind == "schemas" {
+	if kind == lowasync.SchemasLabel {
 		resolved, err = e.loader.schemaReference(src, ref)
 	} else {
 		resolved, err = e.loader.resolve(src, ref)
@@ -314,16 +317,16 @@ func (e *engine) resolveReference(src target, kind, ref string) (target, error) 
 		return target{}, fmt.Errorf("%s#%s: %w", src.doc.uri, src.pointer, err)
 	}
 	// Reject reference-only loops before treating any local reference as safe.
-	if kind == "schemas" {
+	if kind == lowasync.SchemasLabel {
 		return e.schemaTerminal(resolved)
 	}
-	return e.loader.terminal(resolved, kind == "schemaContent")
+	return e.loader.terminal(resolved, kind == kindSchemaContent)
 }
 
 // Reserve explicit component destinations before walking uses that may precede
 // them in the document. The first bare external reference owns the target.
 func (e *engine) reserveComponentTargets() error {
-	components := field(e.loader.root.root, "components")
+	components := field(e.loader.root.root, lowasync.ComponentsLabel)
 	if components == nil || components.Kind != yaml.MappingNode {
 		return nil
 	}
@@ -334,11 +337,11 @@ func (e *engine) reserveComponentTargets() error {
 		}
 		for j := 0; j < len(bucket.Content); j += 2 {
 			n := bucket.Content[j+1]
-			ref := field(n, "$ref")
-			if len(n.Content) != 2 || ref == nil || ref.Kind != yaml.ScalarNode || ref.Tag != "!!str" || ref.Value == "" || strings.HasPrefix(ref.Value, "#") {
+			ref := field(n, lowasync.RefLabel)
+			if len(n.Content) != 2 || ref == nil || ref.Kind != yaml.ScalarNode || ref.Tag != yamlparse.StringTag || ref.Value == "" || strings.HasPrefix(ref.Value, "#") {
 				continue
 			}
-			path := "/components/" + kind + "/" + escape(bucket.Content[j].Value)
+			path := componentsPathPrefix + kind + "/" + escape(bucket.Content[j].Value)
 			t, err := e.resolveReference(target{e.loader.root, path}, kind, ref.Value)
 			if err != nil {
 				return err
@@ -361,18 +364,18 @@ func (e *engine) schemaTerminal(t target) (target, error) {
 			return target{}, fmt.Errorf("reference-only schema cycle at %s#%s", t.doc.uri, t.pointer)
 		}
 		seen[t] = true
-		if err := e.loader.scan(t, "schemas", t.doc.uri, 0); err != nil {
+		if err := e.loader.scan(t, lowasync.SchemasLabel, t.doc.uri, 0); err != nil {
 			return target{}, err
 		}
 		n, err := t.node()
 		if err != nil {
 			return target{}, err
 		}
-		r := field(n, "$ref")
+		r := field(n, lowasync.RefLabel)
 		if r == nil {
 			return t, nil
 		}
-		if r.Kind != yaml.ScalarNode || r.Tag != "!!str" || r.Value == "" {
+		if r.Kind != yaml.ScalarNode || r.Tag != yamlparse.StringTag || r.Value == "" {
 			return target{}, fmt.Errorf("invalid schema $ref")
 		}
 		t, err = e.loader.schemaReference(t, r.Value)
@@ -388,7 +391,7 @@ func (e *engine) compose(src target, kind string, depth int) (string, error) {
 		return path, nil
 	}
 	name := componentName(src)
-	bucket := ensureMap(ensureMap(e.root, "components"), kind)
+	bucket := ensureMap(ensureMap(e.root, lowasync.ComponentsLabel), kind)
 	if field(bucket, name) != nil {
 		name += e.delimiter + componentName(target{src.doc, ""})
 	}
@@ -396,8 +399,8 @@ func (e *engine) compose(src target, kind string, depth int) (string, error) {
 	for i := 1; field(bucket, name) != nil; i++ {
 		name = fmt.Sprintf("%s%s%d", base, e.delimiter, i)
 	}
-	set(bucket, name, &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"})
-	path := "/components/" + kind + "/" + escape(name)
+	set(bucket, name, &yaml.Node{Kind: yaml.MappingNode, Tag: yamlparse.MappingTag})
+	path := componentsPathPrefix + kind + "/" + escape(name)
 	e.components[key] = path
 	e.active[src] = path
 	value, err := e.walk(src, path, kind, depth)
@@ -413,13 +416,13 @@ func (e *engine) finishReferences() error {
 	// Channel/server targets must settle before message membership is checked.
 	for _, messages := range []bool{false, true} {
 		for _, pending := range e.pending {
-			if (pending.role == "messages") != messages {
+			if (pending.role == lowasync.MessagesLabel) != messages {
 				continue
 			}
 			prefix := "/" + pending.role + "/"
 			if messages {
-				container := pending.path[:strings.LastIndex(pending.path, "/messages/")]
-				channel, err := pointer(e.root, container+"/channel/$ref")
+				container := pending.path[:strings.LastIndex(pending.path, messagesPathSegment)]
+				channel, err := pointer(e.root, container+channelRefPath)
 				if err != nil {
 					return fmt.Errorf("#%s: messages require a channel", pending.path)
 				}
@@ -427,7 +430,7 @@ func (e *engine) finishReferences() error {
 				if err != nil {
 					return err
 				}
-				prefix = u + "/messages/"
+				prefix = u + messagesPathSegment
 			}
 			candidates := make(map[string]bool)
 			for ancestor := pending.target; ; {
@@ -455,7 +458,7 @@ func (e *engine) finishReferences() error {
 			if err != nil {
 				return err
 			}
-			if len(candidates) == 0 && !rootUse && strings.HasPrefix(pending.path, "/components/") && !messages {
+			if len(candidates) == 0 && !rootUse && strings.HasPrefix(pending.path, componentsPathPrefix) && !messages {
 				for _, place := range e.placements[pending.target] {
 					candidates[place] = true
 				}
@@ -467,7 +470,7 @@ func (e *engine) finishReferences() error {
 				return fmt.Errorf("#%s: expected one local %s target, found %d", pending.path, pending.role, len(candidates))
 			}
 			for path := range candidates {
-				field(pending.node, "$ref").Value = localRef(path)
+				field(pending.node, lowasync.RefLabel).Value = localRef(path)
 			}
 		}
 	}
@@ -480,7 +483,7 @@ func (e *engine) rootUse(path string) (bool, error) {
 		return false, err
 	}
 	for _, p := range paths {
-		if strings.HasPrefix(p, "/operations/") || strings.HasPrefix(p, "/channels/") {
+		if strings.HasPrefix(p, operationsPathPrefix) || strings.HasPrefix(p, channelsPathPrefix) {
 			return true, nil
 		}
 	}
@@ -528,7 +531,7 @@ func (e *engine) outputTarget(path string) (*yaml.Node, error) {
 		n := e.root
 		redirect := false
 		for i := 0; i <= len(parts); i++ {
-			if r := field(n, "$ref"); r != nil && r.Kind == yaml.ScalarNode && r.Tag == "!!str" {
+			if r := field(n, lowasync.RefLabel); r != nil && r.Kind == yaml.ScalarNode && r.Tag == yamlparse.StringTag {
 				p, err := fragment(r.Value)
 				if err != nil {
 					return nil, err

@@ -12,8 +12,10 @@ import (
 	"unicode"
 
 	"github.com/pb33f/go-yaml"
+	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libasyncapi/internal/schemaformat"
 	"github.com/pb33f/libasyncapi/internal/yamlparse"
+	"github.com/pb33f/libopenapi/datamodel/low/base"
 	"github.com/pb33f/libopenapi/utils"
 )
 
@@ -31,10 +33,10 @@ func field(n *yaml.Node, key string) *yaml.Node {
 
 // referenceOnly separates a foreign schema import from schema metadata named $ref.
 func referenceOnly(n *yaml.Node) bool {
-	return n.Kind == yaml.MappingNode && len(n.Content) == 2 && field(n, "$ref") != nil
+	return n.Kind == yaml.MappingNode && len(n.Content) == 2 && field(n, lowasync.RefLabel) != nil
 }
 func scalar(value string) *yaml.Node {
-	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
+	return &yaml.Node{Kind: yaml.ScalarNode, Tag: yamlparse.StringTag, Value: value}
 }
 func set(n *yaml.Node, key string, value *yaml.Node) {
 	for i := 0; i+1 < len(n.Content); i += 2 {
@@ -49,7 +51,7 @@ func ensureMap(n *yaml.Node, key string) *yaml.Node {
 	if v := field(n, key); v != nil {
 		return v
 	}
-	v := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	v := &yaml.Node{Kind: yaml.MappingNode, Tag: yamlparse.MappingTag}
 	set(n, key, v)
 	return v
 }
@@ -64,11 +66,11 @@ func clone(n *yaml.Node) *yaml.Node {
 func reference(n *yaml.Node, ref string) *yaml.Node {
 	out := *n
 	out.Kind = yaml.MappingNode
-	out.Tag = "!!map"
+	out.Tag = yamlparse.MappingTag
 	out.Anchor = ""
 	out.Alias = nil
-	out.Content = []*yaml.Node{scalar("$ref"), scalar(ref)}
-	if r := field(n, "$ref"); r != nil {
+	out.Content = []*yaml.Node{scalar(lowasync.RefLabel), scalar(ref)}
+	if r := field(n, lowasync.RefLabel); r != nil {
 		c := *r
 		c.Value = ref
 		out.Content[1] = &c
@@ -139,7 +141,7 @@ func componentName(t target) string {
 		return '_'
 	}, name)
 	if name == "" || name == "." {
-		return "imported"
+		return defaultComponentName
 	}
 	return name
 }
@@ -175,127 +177,139 @@ func indentation(root *yaml.Node) int {
 
 func componentKind(kind string) bool {
 	switch kind {
-	case "schemas", "servers", "channels", "operations", "messages", "securitySchemes", "serverVariables", "parameters", "correlationIds", "replies", "replyAddresses", "externalDocs", "tags", "operationTraits", "messageTraits", "serverBindings", "channelBindings", "operationBindings", "messageBindings":
+	case lowasync.SchemasLabel, lowasync.ServersLabel, lowasync.ChannelsLabel,
+		lowasync.OperationsLabel, lowasync.MessagesLabel, lowasync.SecuritySchemesLabel,
+		lowasync.ServerVariablesLabel, lowasync.ParametersLabel, lowasync.CorrelationIDsLabel,
+		lowasync.RepliesLabel, lowasync.ReplyAddressesLabel, lowasync.ExternalDocsLabel,
+		lowasync.TagsLabel, lowasync.OperationTraitsLabel, lowasync.MessageTraitsLabel,
+		lowasync.ServerBindingsLabel, lowasync.ChannelBindingsLabel,
+		lowasync.OperationBindingsLabel, lowasync.MessageBindingsLabel:
 		return true
 	}
 	return false
 }
 
 func childKind(parent, key string) string {
-	if strings.HasPrefix(parent, "map:") {
-		return strings.TrimPrefix(parent, "map:")
+	if strings.HasPrefix(parent, mapKindPrefix) {
+		return strings.TrimPrefix(parent, mapKindPrefix)
 	}
-	if parent == "extension" {
-		return "extension"
+	if parent == kindExtension {
+		return kindExtension
 	}
-	if parent == "root" {
+	if parent == kindRoot {
 		switch key {
-		case "servers", "channels", "operations":
-			return "map:" + key
-		case "components":
-			return "components"
-		case "info":
-			return "info"
+		case lowasync.ServersLabel, lowasync.ChannelsLabel, lowasync.OperationsLabel:
+			return mapKindPrefix + key
+		case lowasync.ComponentsLabel:
+			return lowasync.ComponentsLabel
+		case lowasync.InfoLabel:
+			return lowasync.InfoLabel
 		}
 	}
-	if parent == "components" && componentKind(key) {
-		return "map:" + key
+	if parent == lowasync.ComponentsLabel && componentKind(key) {
+		return mapKindPrefix + key
 	}
-	if parent == "schemas" {
+	if parent == lowasync.SchemasLabel {
 		switch key {
-		case "properties", "patternProperties", "definitions", "$defs", "dependentSchemas", "dependencies":
-			return "map:schemas"
-		case "allOf", "oneOf", "anyOf", "prefixItems":
-			return "list:schemas"
-		case "items", "additionalItems", "additionalProperties", "unevaluatedProperties", "unevaluatedItems", "contains", "not", "if", "then", "else", "propertyNames", "schema":
-			return "schemas"
+		case base.PropertiesLabel, base.PatternPropertiesLabel, definitionsLabel,
+			base.DefsLabel, base.DependentSchemasLabel, dependenciesLabel:
+			return mapKindPrefix + lowasync.SchemasLabel
+		case base.AllOfLabel, base.OneOfLabel, base.AnyOfLabel, base.PrefixItemsLabel:
+			return listKindPrefix + lowasync.SchemasLabel
+		case base.ItemsLabel, additionalItemsLabel, base.AdditionalPropertiesLabel,
+			base.UnevaluatedPropertiesLabel, base.UnevaluatedItemsLabel, base.ContainsLabel,
+			base.NotLabel, base.IfLabel, base.ThenLabel, base.ElseLabel,
+			base.PropertyNamesLabel, lowasync.SchemaLabel:
+			return lowasync.SchemasLabel
 		}
-		return "opaque"
+		return kindOpaque
 	}
 	switch key {
-	case "tags":
-		return "list:tags"
-	case "externalDocs":
-		return "externalDocs"
-	case "bindings":
+	case lowasync.TagsLabel:
+		return listKindPrefix + lowasync.TagsLabel
+	case lowasync.ExternalDocsLabel:
+		return lowasync.ExternalDocsLabel
+	case lowasync.BindingsLabel:
 		switch parent {
-		case "servers":
-			return "serverBindings"
-		case "channels":
-			return "channelBindings"
-		case "operations", "operationTraits":
-			return "operationBindings"
-		case "messages", "messageTraits":
-			return "messageBindings"
+		case lowasync.ServersLabel:
+			return lowasync.ServerBindingsLabel
+		case lowasync.ChannelsLabel:
+			return lowasync.ChannelBindingsLabel
+		case lowasync.OperationsLabel, lowasync.OperationTraitsLabel:
+			return lowasync.OperationBindingsLabel
+		case lowasync.MessagesLabel, lowasync.MessageTraitsLabel:
+			return lowasync.MessageBindingsLabel
 		}
-	case "traits":
-		if parent == "operations" {
-			return "list:operationTraits"
+	case lowasync.TraitsLabel:
+		if parent == lowasync.OperationsLabel {
+			return listKindPrefix + lowasync.OperationTraitsLabel
 		}
-		if parent == "messages" {
-			return "list:messageTraits"
+		if parent == lowasync.MessagesLabel {
+			return listKindPrefix + lowasync.MessageTraitsLabel
 		}
-	case "security":
-		return "list:securitySchemes"
-	case "variables":
-		if parent == "servers" {
-			return "map:serverVariables"
+	case lowasync.SecurityLabel:
+		return listKindPrefix + lowasync.SecuritySchemesLabel
+	case lowasync.VariablesLabel:
+		if parent == lowasync.ServersLabel {
+			return mapKindPrefix + lowasync.ServerVariablesLabel
 		}
-	case "parameters":
-		if parent == "channels" {
-			return "map:parameters"
+	case lowasync.ParametersLabel:
+		if parent == lowasync.ChannelsLabel {
+			return mapKindPrefix + lowasync.ParametersLabel
 		}
-	case "servers":
-		if parent == "channels" {
-			return "list:ref:servers"
+	case lowasync.ServersLabel:
+		if parent == lowasync.ChannelsLabel {
+			return listKindPrefix + refKindPrefix + lowasync.ServersLabel
 		}
-	case "channel":
-		if parent == "operations" || parent == "replies" {
-			return "ref:channels"
+	case lowasync.ChannelLabel:
+		if parent == lowasync.OperationsLabel || parent == lowasync.RepliesLabel {
+			return refKindPrefix + lowasync.ChannelsLabel
 		}
-	case "messages":
-		if parent == "channels" {
-			return "map:messages"
+	case lowasync.MessagesLabel:
+		if parent == lowasync.ChannelsLabel {
+			return mapKindPrefix + lowasync.MessagesLabel
 		}
-		if parent == "operations" || parent == "replies" {
-			return "list:ref:messages"
+		if parent == lowasync.OperationsLabel || parent == lowasync.RepliesLabel {
+			return listKindPrefix + refKindPrefix + lowasync.MessagesLabel
 		}
-	case "reply":
-		if parent == "operations" {
-			return "replies"
+	case lowasync.ReplyLabel:
+		if parent == lowasync.OperationsLabel {
+			return lowasync.RepliesLabel
 		}
-	case "address":
-		if parent == "replies" {
-			return "replyAddresses"
+	case lowasync.AddressLabel:
+		if parent == lowasync.RepliesLabel {
+			return lowasync.ReplyAddressesLabel
 		}
-	case "headers", "payload":
-		if parent == "messages" || parent == "messageTraits" {
-			return "schemas"
+	case lowasync.HeadersLabel, lowasync.PayloadLabel:
+		if parent == lowasync.MessagesLabel || parent == lowasync.MessageTraitsLabel {
+			return lowasync.SchemasLabel
 		}
-	case "correlationId":
-		if parent == "messages" || parent == "messageTraits" {
-			return "correlationIds"
+	case lowasync.CorrelationIDLabel:
+		if parent == lowasync.MessagesLabel || parent == lowasync.MessageTraitsLabel {
+			return lowasync.CorrelationIDsLabel
 		}
 	}
-	if strings.HasSuffix(parent, "Bindings") {
-		return "binding:" + key
+	if strings.HasSuffix(parent, bindingsSuffix) {
+		return bindingKindPrefix + key
 	}
-	if strings.HasPrefix(parent, "binding:") {
+	if strings.HasPrefix(parent, bindingKindPrefix) {
 		switch key {
-		case "schema", "headers", "query", "key":
-			return "schemas"
+		case lowasync.SchemaLabel, lowasync.HeadersLabel, lowasync.QueryLabel, lowasync.KeyLabel:
+			return lowasync.SchemasLabel
 		}
-		if parent == "binding:kafka" && (key == "groupId" || key == "clientId") {
-			return "schemas"
+		if parent == bindingKindPrefix+lowasync.KafkaLabel && (key == lowasync.GroupIDLabel || key == lowasync.ClientIDLabel) {
+			return lowasync.SchemasLabel
 		}
-		if parent == "binding:mqtt" {
+		if parent == bindingKindPrefix+lowasync.MQTTLabel {
 			switch key {
-			case "correlationData", "responseTopic", "sessionExpiryInterval", "maximumPacketSize", "messageExpiryInterval":
-				return "schemas"
+			case lowasync.CorrelationDataLabel, lowasync.ResponseTopicLabel,
+				lowasync.SessionExpiryIntervalLabel, lowasync.MaximumPacketSizeLabel,
+				lowasync.MessageExpiryIntervalLabel:
+				return lowasync.SchemasLabel
 			}
 		}
 	}
-	return "opaque"
+	return kindOpaque
 }
 
 func validDelimiter(s string) bool {

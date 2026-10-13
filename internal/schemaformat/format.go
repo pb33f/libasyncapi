@@ -6,6 +6,16 @@ package schemaformat
 
 import "mime"
 
+const (
+	asyncAPIJSONMediaType   = "application/vnd.aai.asyncapi+json"
+	asyncAPIYAMLMediaType   = "application/vnd.aai.asyncapi+yaml"
+	jsonSchemaJSONMediaType = "application/schema+json"
+	jsonSchemaYAMLMediaType = "application/schema+yaml"
+	openAPIMediaType        = "application/vnd.oai.openapi"
+	openAPIJSONMediaType    = "application/vnd.oai.openapi+json"
+	openAPIYAMLMediaType    = "application/vnd.oai.openapi+yaml"
+)
+
 // IsJSON reports whether format uses the supported JSON Schema reference syntax.
 func IsJSON(format string) bool {
 	mediaType, _, err := mime.ParseMediaType(format)
@@ -13,9 +23,9 @@ func IsJSON(format string) bool {
 		return false
 	}
 	switch mediaType {
-	case "application/vnd.aai.asyncapi+json", "application/vnd.aai.asyncapi+yaml",
-		"application/schema+json", "application/schema+yaml",
-		"application/vnd.oai.openapi", "application/vnd.oai.openapi+json", "application/vnd.oai.openapi+yaml":
+	case asyncAPIJSONMediaType, asyncAPIYAMLMediaType,
+		jsonSchemaJSONMediaType, jsonSchemaYAMLMediaType,
+		openAPIMediaType, openAPIJSONMediaType, openAPIYAMLMediaType:
 		return true
 	}
 	return false
