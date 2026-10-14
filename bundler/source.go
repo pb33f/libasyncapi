@@ -21,12 +21,39 @@ import (
 )
 
 type source struct {
-	uri  string
-	root *yaml.Node
+	uri     string
+	baseURI string
+	root    *yaml.Node
 }
+
+// resolve keeps fragment-only references on their source document. An entry
+// base override changes relative imports, not the identity of the entry file.
+func (s *source) resolve(ref *url.URL) *url.URL {
+	base := s.uri
+	if ref.Path != "" && s.baseURI != "" {
+		base = s.baseURI
+	}
+	u, _ := url.Parse(base)
+	return u.ResolveReference(ref)
+}
+
+func fileURL(path string) *url.URL {
+	uriPath := filepath.ToSlash(path)
+	// A drive letter belongs in the URL path, not its authority.
+	if !strings.HasPrefix(uriPath, "/") {
+		uriPath = "/" + uriPath
+	}
+	return &url.URL{Scheme: fileScheme, Path: uriPath}
+}
+
 type target struct {
 	doc     *source
 	pointer string
+}
+
+type schemaScope struct {
+	uri      string
+	explicit bool
 }
 
 func (t target) node() (*yaml.Node, error) { return pointer(t.doc.root, t.pointer) }
@@ -38,7 +65,7 @@ type loader struct {
 	resolved  map[target]target
 	resolving int
 	resources map[string]target
-	scopes    map[target]string
+	scopes    map[target]schemaScope
 	scanned   map[target]bool
 }
 
@@ -53,18 +80,19 @@ func newLoader(root *yaml.Node, config *libasyncapi.DocumentConfiguration) (*loa
 	} else if !filepath.IsAbs(rootPath) {
 		rootPath = filepath.Join(base, rootPath)
 	}
-	uriPath := filepath.ToSlash(rootPath)
-	// A drive letter belongs in the URL path, not its authority.
-	if !strings.HasPrefix(uriPath, "/") {
-		uriPath = "/" + uriPath
+	rootURI := fileURL(rootPath).String()
+	var referenceBase string
+	if config.BasePath != "" {
+		baseURL := fileURL(base)
+		baseURL.Path = strings.TrimSuffix(baseURL.Path, "/") + "/"
+		referenceBase = baseURL.String()
 	}
-	rootURI := (&url.URL{Scheme: fileScheme, Path: uriPath}).String()
 	if config.BaseURL != nil {
 		baseURL := *config.BaseURL
 		if !strings.HasSuffix(baseURL.Path, "/") {
 			baseURL.Path += "/"
 		}
-		rootURI = baseURL.ResolveReference(&url.URL{Path: filepath.Base(rootPath)}).String()
+		referenceBase = baseURL.String()
 	}
 	cfg := index.CreateClosedAPIIndexConfig()
 	cfg.SkipDocumentCheck = true
@@ -102,9 +130,9 @@ func newLoader(root *yaml.Node, config *libasyncapi.DocumentConfiguration) (*loa
 		}
 		rolo.AddRemoteFS(defaultRemoteFS, remote)
 	}
-	src := &source{rootURI, root.Content[0]}
-	l := &loader{root: src, rolodex: rolo, documents: map[string]*source{rootURI: src}, resolved: make(map[target]target), resources: make(map[string]target), scopes: make(map[target]string), scanned: make(map[target]bool)}
-	if err := l.scan(target{src, ""}, kindRoot, src.uri, 0); err != nil {
+	src := &source{uri: rootURI, baseURI: referenceBase, root: root.Content[0]}
+	l := &loader{root: src, rolodex: rolo, documents: map[string]*source{rootURI: src}, resolved: make(map[target]target), resources: make(map[string]target), scopes: make(map[target]schemaScope), scanned: make(map[target]bool)}
+	if err := l.scan(target{src, ""}, kindRoot, schemaScope{uri: src.uri}, 0); err != nil {
 		return nil, err
 	}
 	return l, nil
@@ -112,7 +140,7 @@ func newLoader(root *yaml.Node, config *libasyncapi.DocumentConfiguration) (*loa
 
 // scan registers schema resources without interpreting examples or payloads in
 // other languages. References are resolved only when the bundler visits them.
-func (l *loader) scan(t target, kind, base string, depth int) error {
+func (l *loader) scan(t target, kind string, scope schemaScope, depth int) error {
 	if kind == kindOpaque || kind == kindSchemaContent {
 		return nil
 	}
@@ -133,16 +161,21 @@ func (l *loader) scan(t target, kind, base string, depth int) error {
 			if err != nil {
 				return err
 			}
-			b, _ := url.Parse(base)
-			base = b.ResolveReference(u).String()
-			if prior, ok := l.resources[base]; ok && prior != t {
-				return fmt.Errorf("duplicate schema resource %q", base)
+			if !scope.explicit {
+				scope.uri = t.doc.resolve(u).String()
+			} else {
+				b, _ := url.Parse(scope.uri)
+				scope.uri = b.ResolveReference(u).String()
 			}
-			l.resources[base] = t
+			scope.explicit = true
+			if prior, ok := l.resources[scope.uri]; ok && prior != t {
+				return fmt.Errorf("duplicate schema resource %q", scope.uri)
+			}
+			l.resources[scope.uri] = t
 		}
-		l.scopes[t] = base
+		l.scopes[t] = scope
 		if anchor := field(n, lowbase.AnchorLabel); anchor != nil {
-			u, _ := url.Parse(base)
+			u, _ := url.Parse(scope.uri)
 			u.Fragment = anchor.Value
 			l.resources[u.String()] = t
 		}
@@ -154,13 +187,13 @@ func (l *loader) scan(t target, kind, base string, depth int) error {
 			if kind == lowasync.SchemasLabel && key == lowasync.SchemaLabel && field(n, lowasync.SchemaFormatLabel) != nil && !jsonSchemaFormat(field(n, lowasync.SchemaFormatLabel).Value) {
 				child = kindSchemaContent
 			}
-			if err := l.scan(target{t.doc, t.pointer + "/" + escape(key)}, child, base, depth+1); err != nil {
+			if err := l.scan(target{t.doc, t.pointer + "/" + escape(key)}, child, scope, depth+1); err != nil {
 				return err
 			}
 		}
 	} else if n.Kind == yaml.SequenceNode {
 		for i := range n.Content {
-			if err := l.scan(target{t.doc, fmt.Sprintf("%s/%d", t.pointer, i)}, strings.TrimPrefix(kind, listKindPrefix), base, depth+1); err != nil {
+			if err := l.scan(target{t.doc, fmt.Sprintf("%s/%d", t.pointer, i)}, strings.TrimPrefix(kind, listKindPrefix), scope, depth+1); err != nil {
 				return err
 			}
 		}
@@ -169,16 +202,17 @@ func (l *loader) scan(t target, kind, base string, depth int) error {
 }
 
 func (l *loader) schemaReference(from target, ref string) (target, error) {
-	base := l.scopes[from]
-	if base == "" {
-		base = from.doc.uri
-	}
+	scope := l.scopes[from]
 	u, err := url.Parse(ref)
 	if err != nil {
 		return target{}, err
 	}
-	b, _ := url.Parse(base)
-	u = b.ResolveReference(u)
+	if !scope.explicit {
+		u = from.doc.resolve(u)
+	} else {
+		b, _ := url.Parse(scope.uri)
+		u = b.ResolveReference(u)
+	}
 	if t, ok := l.resources[u.String()]; ok {
 		return t, nil
 	}
@@ -200,11 +234,11 @@ func (l *loader) schemaReference(from target, ref string) (target, error) {
 	if field(document.doc.root, lowasync.AsyncAPILabel) != nil {
 		kind = kindRoot
 	}
-	if err := l.scan(target{document.doc, ""}, kind, document.doc.uri, 0); err != nil {
+	if err := l.scan(target{document.doc, ""}, kind, schemaScope{uri: document.doc.uri}, 0); err != nil {
 		return target{}, err
 	}
 	if frag != "" && !strings.HasPrefix(frag, "/") {
-		base := l.scopes[target{document.doc, ""}]
+		base := l.scopes[target{document.doc, ""}].uri
 		if base == "" {
 			base = document.doc.uri
 		}
@@ -229,8 +263,7 @@ func (l *loader) resolve(from target, ref string) (target, error) {
 	if err != nil {
 		return target{}, fmt.Errorf("invalid reference %q: %w", ref, err)
 	}
-	base, _ := url.Parse(from.doc.uri)
-	u = base.ResolveReference(u)
+	u = from.doc.resolve(u)
 	ptr := u.Fragment
 	if ptr != "" && !strings.HasPrefix(ptr, "/") {
 		return target{}, fmt.Errorf("unsupported reference anchor %q", ref)
@@ -272,7 +305,7 @@ func (l *loader) resolve(from target, ref string) (target, error) {
 		if n.Kind == yaml.DocumentNode {
 			n = n.Content[0]
 		}
-		doc = &source{uri, n}
+		doc = &source{uri: uri, root: n}
 		l.documents[uri] = doc
 	}
 	t := target{doc, ""}
