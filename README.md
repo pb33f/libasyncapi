@@ -42,10 +42,13 @@ moves imported objects into AsyncAPI component sections. Collisions add the sour
 file name and, when needed, a numeric suffix. Both modes preserve root-local
 references and fields that require Reference Objects. Cycles use local references.
 Operation messages continue to reference their channel's messages; operations and
-channel servers continue to reference the required root locations. Inline mode
+channel servers continue to reference the required root locations. An operations-only
+actor can reference channels in an external domain file. When no root destination
+exists, the bundler imports the required external channels and servers at the root.
+Existing root destinations take precedence; ambiguous targets still return an error.
+Inline mode
 emits each shared external schema once and uses local references for later uses
-to prevent exponential output growth. Ambiguous
-external targets return an error instead of adding active channels or servers.
+to prevent exponential output growth.
 
 The bundler reads the source tree directly and does not require a typed model.
 It preserves comments, key order, explicit empty values, examples, bindings, and
