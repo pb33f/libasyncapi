@@ -24,7 +24,9 @@ type BundleCompositionConfig struct {
 
 // BundleBytes inlines external references where AsyncAPI permits an object.
 // Root-local references are preserved. Recursive and reference-only fields use
-// local references. On failure no output is returned. Input and configuration
+// local references. External channels and servers required by root operations
+// are imported at the root when no existing destination is available.
+// On failure no output is returned. Input and configuration
 // are not modified. Output is YAML, including when the input is JSON.
 func BundleBytes(spec []byte, config *libasyncapi.DocumentConfiguration) ([]byte, error) {
 	return bundle(spec, config, false, defaultDelimiter)
@@ -32,7 +34,8 @@ func BundleBytes(spec []byte, config *libasyncapi.DocumentConfiguration) ([]byte
 
 // BundleBytesComposed places external objects in their AsyncAPI component
 // sections and rewrites references to local targets. Reference-only fields keep
-// the channel, message and server locations required by AsyncAPI.
+// the channel, message and server locations required by AsyncAPI. Missing root
+// destinations for required external channels and servers are added as aliases.
 func BundleBytesComposed(spec []byte, config *libasyncapi.DocumentConfiguration, composition *BundleCompositionConfig) ([]byte, error) {
 	delimiter := defaultDelimiter
 	if composition != nil && composition.Delimiter != "" {
@@ -141,6 +144,9 @@ func bundle(spec []byte, config *libasyncapi.DocumentConfiguration, composed boo
 		set(ensureMap(components, item.kind), item.name, item.node)
 	}
 	e.root = result
+	if err := e.materializeRootTargets(); err != nil {
+		return nil, err
+	}
 	if err := e.finishReferences(); err != nil {
 		return nil, err
 	}
@@ -412,6 +418,97 @@ func (e *engine) compose(src target, kind string, depth int) (string, error) {
 	return path, nil
 }
 
+// referenceCandidates finds existing logical destinations, including paths
+// reached through component aliases. All reference placement uses this lookup.
+func (e *engine) referenceCandidates(t target, prefix string) (map[string]bool, error) {
+	candidates := make(map[string]bool)
+	for ancestor := t; ; {
+		suffix := strings.TrimPrefix(t.pointer, ancestor.pointer)
+		for _, place := range e.placements[ancestor] {
+			paths, err := e.project(place + suffix)
+			if err != nil {
+				return nil, err
+			}
+			for _, path := range paths {
+				if strings.HasPrefix(path, prefix) && !strings.Contains(strings.TrimPrefix(path, prefix), "/") {
+					if _, err := e.outputTarget(path); err == nil {
+						candidates[path] = true
+					}
+				}
+			}
+		}
+		if ancestor.pointer == "" {
+			break
+		}
+		ancestor.pointer = ancestor.pointer[:strings.LastIndex(ancestor.pointer, "/")]
+	}
+	return candidates, nil
+}
+
+// materializeRootTargets imports external channels and servers required by
+// root operations and channels. Existing destinations, including ambiguous
+// destinations, remain authoritative. Messages must belong to their channel.
+func (e *engine) materializeRootTargets() error {
+	imported := len(e.imports)
+	for {
+		changed := false
+		for i := 0; i < len(e.pending); i++ {
+			p := e.pending[i]
+			if p.role != lowasync.ChannelsLabel && p.role != lowasync.ServersLabel || p.target.doc == e.loader.root {
+				continue
+			}
+			rootUse, err := e.rootUse(p.path)
+			if err != nil {
+				return err
+			}
+			if !rootUse {
+				continue
+			}
+			candidates, err := e.referenceCandidates(p.target, "/"+p.role+"/")
+			if err != nil {
+				return err
+			}
+			if len(candidates) != 0 {
+				continue
+			}
+			bucket := ensureMap(e.root, p.role)
+			name := componentName(p.target)
+			if field(bucket, name) != nil {
+				name += e.delimiter + componentName(target{p.target.doc, ""})
+			}
+			base := name
+			for j := 1; field(bucket, name) != nil; j++ {
+				name = fmt.Sprintf("%s%s%d", base, e.delimiter, j)
+			}
+			path := "/" + p.role + "/" + escape(name)
+			var value *yaml.Node
+			if e.composed {
+				component, err := e.compose(p.target, p.role, 0)
+				if err != nil {
+					return err
+				}
+				value = reference(&yaml.Node{}, localRef(component))
+				e.aliases[component] = append(e.aliases[component], path)
+			} else {
+				value, err = e.walk(p.target, path, p.role, 0)
+				if err != nil {
+					return err
+				}
+			}
+			set(bucket, name, value)
+			// New imports may contain references used by the next pending edge.
+			for ; imported < len(e.imports); imported++ {
+				item := e.imports[imported]
+				set(ensureMap(ensureMap(e.root, lowasync.ComponentsLabel), item.kind), item.name, item.node)
+			}
+			changed = true
+		}
+		if !changed {
+			return nil
+		}
+	}
+}
+
 func (e *engine) finishReferences() error {
 	// Channel/server targets must settle before message membership is checked.
 	for _, messages := range []bool{false, true} {
@@ -432,26 +529,9 @@ func (e *engine) finishReferences() error {
 				}
 				prefix = u + messagesPathSegment
 			}
-			candidates := make(map[string]bool)
-			for ancestor := pending.target; ; {
-				suffix := strings.TrimPrefix(pending.target.pointer, ancestor.pointer)
-				for _, place := range e.placements[ancestor] {
-					paths, err := e.project(place + suffix)
-					if err != nil {
-						return err
-					}
-					for _, path := range paths {
-						if strings.HasPrefix(path, prefix) && !strings.Contains(strings.TrimPrefix(path, prefix), "/") {
-							if _, err := e.outputTarget(path); err == nil {
-								candidates[path] = true
-							}
-						}
-					}
-				}
-				if ancestor.pointer == "" {
-					break
-				}
-				ancestor.pointer = ancestor.pointer[:strings.LastIndex(ancestor.pointer, "/")]
+			candidates, err := e.referenceCandidates(pending.target, prefix)
+			if err != nil {
+				return err
 			}
 			// Component operations/channels can reference reusable objects too.
 			rootUse, err := e.rootUse(pending.path)

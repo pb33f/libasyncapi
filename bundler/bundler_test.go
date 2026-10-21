@@ -131,7 +131,7 @@ func TestBundleErrors(t *testing.T) {
 		{"badRef", header + "channels: {a: {$ref: []}}", nil, "invalid $ref"},
 		{"loop", header + "channels: {a: {$ref: a.yaml}}", map[string]string{"a.yaml": "$ref: b.yaml", "b.yaml": "$ref: a.yaml"}, "reference-only cycle"},
 		{"channelObject", header + "operations: {a: {channel: {address: a}}}", nil, "requires a Reference"},
-		{"unplacedChannel", header + "operations: {a: {channel: {$ref: a.yaml}}}", map[string]string{"a.yaml": "address: a"}, "expected one local"},
+		{"unplacedLocalChannel", header + "components: {channels: {a: {address: a}}}\noperations: {a: {channel: {$ref: '#/components/channels/a'}}}", nil, "expected one local"},
 		{"ambiguous", header + "channels: {a: {$ref: a.yaml}, b: {$ref: a.yaml}}\noperations: {a: {channel: {$ref: a.yaml}}}", map[string]string{"a.yaml": "address: a"}, "found 2"},
 		{"duplicate", header + "channels: {a: {}, a: {}}", nil, "duplicate"},
 	}
