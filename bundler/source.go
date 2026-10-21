@@ -33,6 +33,7 @@ func (t target) node() (*yaml.Node, error) { return pointer(t.doc.root, t.pointe
 
 type loader struct {
 	root      *source
+	rootBase  string
 	rolodex   *index.Rolodex
 	documents map[string]*source
 	resolved  map[target]target
@@ -104,6 +105,13 @@ func newLoader(root *yaml.Node, config *libasyncapi.DocumentConfiguration) (*loa
 	}
 	src := &source{rootURI, root.Content[0]}
 	l := &loader{root: src, rolodex: rolo, documents: map[string]*source{rootURI: src}, resolved: make(map[target]target), resources: make(map[string]target), scopes: make(map[target]string), scanned: make(map[target]bool)}
+	if config.BasePath != "" && config.BaseURL == nil {
+		basePath := filepath.ToSlash(base)
+		if !strings.HasPrefix(basePath, "/") {
+			basePath = "/" + basePath
+		}
+		l.rootBase = (&url.URL{Scheme: fileScheme, Path: strings.TrimSuffix(basePath, "/") + "/"}).String()
+	}
 	if err := l.scan(target{src, ""}, kindRoot, src.uri, 0); err != nil {
 		return nil, err
 	}
@@ -133,7 +141,7 @@ func (l *loader) scan(t target, kind, base string, depth int) error {
 			if err != nil {
 				return err
 			}
-			b, _ := url.Parse(base)
+			b, _ := url.Parse(l.referenceBase(t, base, u))
 			base = b.ResolveReference(u).String()
 			if prior, ok := l.resources[base]; ok && prior != t {
 				return fmt.Errorf("duplicate schema resource %q", base)
@@ -177,7 +185,7 @@ func (l *loader) schemaReference(from target, ref string) (target, error) {
 	if err != nil {
 		return target{}, err
 	}
-	b, _ := url.Parse(base)
+	b, _ := url.Parse(l.referenceBase(from, base, u))
 	u = b.ResolveReference(u)
 	if t, ok := l.resources[u.String()]; ok {
 		return t, nil
@@ -229,7 +237,7 @@ func (l *loader) resolve(from target, ref string) (target, error) {
 	if err != nil {
 		return target{}, fmt.Errorf("invalid reference %q: %w", ref, err)
 	}
-	base, _ := url.Parse(from.doc.uri)
+	base, _ := url.Parse(l.referenceBase(from, from.doc.uri, u))
 	u = base.ResolveReference(u)
 	ptr := u.Fragment
 	if ptr != "" && !strings.HasPrefix(ptr, "/") {
@@ -296,6 +304,16 @@ func (l *loader) resolve(from target, ref string) (target, error) {
 		}
 	}
 	return t, nil
+}
+
+// referenceBase applies the explicit root lookup directory to external paths.
+// Fragment-only references retain the entry document's identity; loaded files
+// and schema resources resolve their references against their own locations.
+func (l *loader) referenceBase(from target, base string, ref *url.URL) string {
+	if l.rootBase != "" && from.doc == l.root && base == l.root.uri && ref.Path != "" {
+		return l.rootBase
+	}
+	return base
 }
 
 // bareOnly preserves metadata inside foreign schemas. Those results must not
