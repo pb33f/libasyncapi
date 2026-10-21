@@ -59,8 +59,11 @@ reference cannot be loaded.
 
 Remote loading requires `AllowRemoteReferences`. `LocalFS` and `RemoteURLHandler`
 can supply custom sources. `SpecFilePath` identifies the entry document for
-references back to it. A nonempty `BasePath` enables local loading, as it does for
-the parser. Set `ExcludeExtensionRefs` to keep `$ref` values in extensions as data;
+references back to it. A nonempty `BasePath` enables local loading and supplies the
+entry document's external reference directory, even when `SpecFilePath` is in a
+different directory. Fragment-only references retain the entry document's identity;
+loaded files resolve relative paths from their own locations. Set
+`ExcludeExtensionRefs` to keep `$ref` values in extensions as data;
 example values are always treated as data.
 
 `BasePath` is a starting directory, not a file access boundary: parent paths and

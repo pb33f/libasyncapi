@@ -42,6 +42,48 @@ func TestBundleFileURIWithSpaces(t *testing.T) {
 	}
 }
 
+func TestBundleBasePathPreservesRootIdentity(t *testing.T) {
+	for _, composed := range []bool{false, true} {
+		t.Run(fmt.Sprint(composed), func(t *testing.T) {
+			base := filepath.Join(t.TempDir(), "common files")
+			require.NoError(t, os.MkdirAll(filepath.Join(base, "nested"), 0755))
+			files := map[string]string{
+				"ch.yaml":            "messages: {event: {$ref: './asyncapi.yaml#/components/messages/m'}}\n",
+				"asyncapi.yaml":      "components: {messages: {m: {payload: {type: integer}}}}\n",
+				"nested/schema.yaml": "type: object\nproperties: {child: {$ref: child.yaml}}\n",
+				"nested/child.yaml":  "type: boolean\n",
+			}
+			for name, content := range files {
+				require.NoError(t, os.WriteFile(filepath.Join(base, name), []byte(content), 0600))
+			}
+			spec := []byte(header + `channels: {events: {$ref: 'ch.yaml'}}
+components:
+  messages: {m: {payload: {type: string}}, local: {$ref: '#/components/messages/m'}}
+  schemas:
+    external: {$ref: 'nested/schema.yaml'}
+    scoped: {$id: 'nested/scoped.yaml', type: object, properties: {child: {$ref: child.yaml}}}
+`)
+			cfg := &libasyncapi.DocumentConfiguration{BasePath: base, SpecFilePath: filepath.Join(filepath.Dir(base), "v2", "asyncapi.yaml")}
+			out, err := runBundle(spec, cfg, composed)
+			require.NoError(t, err)
+			e := &engine{root: decode(t, out)}
+			for path, want := range map[string]string{
+				"/channels/events/messages/event/payload":       "integer",
+				"/components/messages/local/payload":            "string",
+				"/components/schemas/external/properties/child": "boolean",
+				"/components/schemas/scoped/properties/child":   "boolean",
+			} {
+				n, err := e.outputTarget(path)
+				require.NoError(t, err)
+				assert.Equal(t, want, field(n, "type").Value, path)
+			}
+			again, err := runBundle(out, nil, composed)
+			require.NoError(t, err)
+			assert.Equal(t, string(out), string(again))
+		})
+	}
+}
+
 func TestBundleReusableOperation(t *testing.T) {
 	for _, composed := range []bool{false, true} {
 		cfg := filesConfig(map[string]string{"channel.yaml": "address: a\nmessages: {event: {name: Event}}"})
