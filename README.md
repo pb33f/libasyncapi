@@ -216,6 +216,18 @@ if changes != nil {
 
 ## Documentation and support
 
+Multi Format Schemas preserve their `schemaFormat` and content during comparison.
+JSON Schema wrappers use the existing schema comparison rules. Other schema
+languages are compared as opaque content; format and content changes are breaking
+by default and can be configured with the `multiFormatSchema` rule. A bare
+`schema: {$ref: ...}` resolves its target, while reference-like fields inside
+foreign schema content remain data. Formatting and source line changes do not
+count as content changes.
+
+Tools that already parse YAML or JSON can call `NewDocumentFromNode(root, config)`
+to avoid parsing the same input again. This transfers tree ownership to the
+document; do not mutate the tree while the document or its models are in use.
+
 The public Go API is documented at
 [pkg.go.dev/github.com/pb33f/libasyncapi](https://pkg.go.dev/github.com/pb33f/libasyncapi).
 Full project documentation and a dedicated logo have not been published yet.

@@ -50,6 +50,7 @@ package libasyncapi
 import (
 	"errors"
 	"fmt"
+	"github.com/pb33f/go-yaml"
 
 	highasync "github.com/pb33f/libasyncapi/datamodel/high/asyncapi"
 	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
@@ -69,6 +70,20 @@ func NewDocument(spec []byte) (Document, error) {
 // NewDocumentWithConfiguration is the same as NewDocument, except it accepts a configuration
 // that allows control over file and remote reference resolution.
 func NewDocumentWithConfiguration(spec []byte, config *DocumentConfiguration) (Document, error) {
+	rootNode, err := yamlparse.Parse(spec)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidYAML, err)
+	}
+	return NewDocumentFromNode(rootNode, config)
+}
+
+// NewDocumentFromNode builds an AsyncAPI document from an already parsed YAML or
+// JSON root. The caller transfers ownership of the tree and must not mutate it
+// while the document is in use. This avoids reparsing during format dispatch.
+func NewDocumentFromNode(rootNode *yaml.Node, config *DocumentConfiguration) (Document, error) {
+	if rootNode == nil {
+		return nil, ErrInvalidYAML
+	}
 	if config == nil {
 		config = NewDocumentConfiguration()
 	}
@@ -78,11 +93,6 @@ func NewDocumentWithConfiguration(spec []byte, config *DocumentConfiguration) (D
 		errors: make([]error, 0, 4),
 	}
 
-	// Parse YAML
-	rootNode, err := yamlparse.Parse(spec)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidYAML, err)
-	}
 	doc.rootNode = rootNode
 
 	// Extract and validate version

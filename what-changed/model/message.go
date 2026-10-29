@@ -6,6 +6,7 @@ package model
 import (
 	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/low"
+	"github.com/pb33f/libopenapi/datamodel/low/base"
 	wcmodel "github.com/pb33f/libopenapi/what-changed/model"
 )
 
@@ -324,7 +325,9 @@ func CompareMessages(l, r *lowasync.Message, configs ...*BreakingRulesConfig) *M
 		CompMessage, PropHeaders, &changes, wcmodel.CompareSchemas, &m.HeadersChanges, config)
 
 	compareNestedObject(l.Payload, r.Payload, lowasync.PayloadLabel,
-		CompMessage, PropPayload, &changes, wcmodel.CompareSchemas, &m.PayloadChanges, config)
+		CompMessage, PropPayload, &changes, func(l, r *base.SchemaProxy) *wcmodel.SchemaChanges {
+			return compareSchema(l, r, config)
+		}, &m.PayloadChanges, config)
 
 	compareNestedObject(l.CorrelationID, r.CorrelationID, lowasync.CorrelationIDLabel,
 		CompMessage, PropCorrelationID, &changes, configuredNestedCompare(config, CompareCorrelationID), &m.CorrelationIDChanges, config)

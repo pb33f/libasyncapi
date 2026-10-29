@@ -15,6 +15,8 @@ import (
 // BreakingRulesConfig holds all breaking change rules organized by AsyncAPI component.
 // Structure mirrors the AsyncAPI 3.0 specification.
 type BreakingRulesConfig struct {
+	// MultiFormatSchema classifies format changes and opaque schema content edits.
+	MultiFormatSchema  *BreakingChangeRule           `json:"multiFormatSchema,omitempty" yaml:"multiFormatSchema,omitempty"`
 	AsyncAPI           *BreakingChangeRule           `json:"asyncapi,omitempty" yaml:"asyncapi,omitempty"`
 	ID                 *BreakingChangeRule           `json:"id,omitempty" yaml:"id,omitempty"`
 	DefaultContentType *BreakingChangeRule           `json:"defaultContentType,omitempty" yaml:"defaultContentType,omitempty"`

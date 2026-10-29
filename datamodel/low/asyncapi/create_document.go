@@ -103,6 +103,8 @@ func CreateDocumentWithConfig(rootNode *yaml.Node, config *DocumentConfiguration
 	// Create index configuration
 	idxConfig := index.CreateClosedAPIIndexConfig()
 	idxConfig.SkipDocumentCheck = true // AsyncAPI documents don't have openapi/swagger fields
+	// Include resolved schema content in parent hashes, with per-index reuse for shared refs.
+	idxConfig.UseSchemaQuickHash = true
 	idxConfig.SpecFilePath = config.SpecFilePath
 	idxConfig.ExcludeExtensionRefs = config.ExcludeExtensionRefs
 	// Register AsyncAPI aliases before the resolver visits their dependents.
@@ -142,9 +144,14 @@ func CreateDocumentWithConfig(rootNode *yaml.Node, config *DocumentConfiguration
 			localFSConf.DirFS = config.LocalFS
 		}
 
-		fileFS, err := index.NewLocalFSWithConfig(&localFSConf)
-		if err != nil {
-			return nil, errors.New("failed to create local filesystem: " + err.Error())
+		var fileFS index.RolodexFS
+		if supplied, ok := config.LocalFS.(index.RolodexFS); ok {
+			fileFS = supplied
+		} else {
+			fileFS, err = index.NewLocalFSWithConfig(&localFSConf)
+			if err != nil {
+				return nil, errors.New("failed to create local filesystem: " + err.Error())
+			}
 		}
 		idxConfig.AllowFileLookup = true
 

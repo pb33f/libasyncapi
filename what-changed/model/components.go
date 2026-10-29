@@ -6,6 +6,7 @@ package model
 import (
 	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/low"
+	"github.com/pb33f/libopenapi/datamodel/low/base"
 	wcmodel "github.com/pb33f/libopenapi/what-changed/model"
 )
 
@@ -187,7 +188,9 @@ func CompareComponents(l, r *lowasync.Components, configs ...*BreakingRulesConfi
 	cc := new(ComponentsChanges)
 
 	assignIfChanged(&cc.SchemaChanges, CheckMapForChangesWithRules(l.Schemas.Value, r.Schemas.Value,
-		&changes, lowasync.SchemasLabel, wcmodel.CompareSchemas, CompComponents, PropSchemas, config))
+		&changes, lowasync.SchemasLabel, func(l, r *base.SchemaProxy) *wcmodel.SchemaChanges {
+			return compareSchema(l, r, config)
+		}, CompComponents, PropSchemas, config))
 	assignIfChanged(&cc.ServerChanges, CheckMapForChangesWithRules(l.Servers.Value, r.Servers.Value,
 		&changes, lowasync.ServersLabel, configuredCompare(config, CompareServers), CompComponents, PropServers, config))
 	assignIfChanged(&cc.ChannelChanges, CheckMapForChangesWithRules(l.Channels.Value, r.Channels.Value,
