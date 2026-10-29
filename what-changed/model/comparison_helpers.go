@@ -7,7 +7,9 @@ import (
 	"reflect"
 
 	"github.com/pb33f/go-yaml"
+	lowasync "github.com/pb33f/libasyncapi/datamodel/low/asyncapi"
 	"github.com/pb33f/libopenapi/datamodel/low"
+	"github.com/pb33f/libopenapi/datamodel/low/base"
 	"github.com/pb33f/libopenapi/orderedmap"
 	wcmodel "github.com/pb33f/libopenapi/what-changed/model"
 )
@@ -120,7 +122,7 @@ func checkMapForChangesInternal[T any, R any](expLeft, expRight *orderedmap.Map[
 			lValues[k.Value] = v
 			lNodes[k.Value] = changeNode(v.ValueNode, k.KeyNode)
 			if !isNil(v.Value) {
-				lHashes[k.Value] = low.GenerateHashString(v.Value)
+				lHashes[k.Value] = comparisonHash(v.Value)
 			}
 		}
 	}
@@ -131,7 +133,7 @@ func checkMapForChangesInternal[T any, R any](expLeft, expRight *orderedmap.Map[
 			rValues[k.Value] = v
 			rNodes[k.Value] = changeNode(v.ValueNode, k.KeyNode)
 			if !isNil(v.Value) {
-				rHashes[k.Value] = low.GenerateHashString(v.Value)
+				rHashes[k.Value] = comparisonHash(v.Value)
 			}
 		}
 	}
@@ -194,6 +196,13 @@ func changeNode(valueNode, keyNode *yaml.Node) *yaml.Node {
 		return keyNode
 	}
 	return valueNode
+}
+
+func comparisonHash[T any](value T) string {
+	if proxy, ok := any(value).(*base.SchemaProxy); ok {
+		return lowasync.SchemaHash(proxy)
+	}
+	return low.GenerateHashString(value)
 }
 
 // isNil reports whether a generic value is nil, handling typed nil pointers that would

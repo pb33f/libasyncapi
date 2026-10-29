@@ -155,7 +155,7 @@ func (m *Message) Hash() uint64 {
 			h.WriteByte(low.HASH_PIPE)
 		}
 		if !m.Payload.IsEmpty() {
-			h.WriteString(low.GenerateHashString(m.Payload.Value))
+			h.WriteString(SchemaHash(m.Payload.Value))
 			h.WriteByte(low.HASH_PIPE)
 		}
 		if !m.CorrelationID.IsEmpty() {

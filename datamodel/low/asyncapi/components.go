@@ -358,7 +358,7 @@ func (c *Components) Hash() uint64 {
 	return low.WithHasher(func(h *maphash.Hash) uint64 {
 		if c.Schemas.Value != nil {
 			for v := range orderedmap.SortAlpha(c.Schemas.Value).ValuesFromOldest() {
-				h.WriteString(low.GenerateHashString(v.Value))
+				h.WriteString(SchemaHash(v.Value))
 				h.WriteByte(low.HASH_PIPE)
 			}
 		}

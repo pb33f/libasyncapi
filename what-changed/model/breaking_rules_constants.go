@@ -6,6 +6,7 @@ package model
 // Component name constants for breaking change rule lookups.
 // These match the JSON keys used in BreakingRulesConfig.
 const (
+	CompMultiFormatSchema       = "multiFormatSchema"
 	CompAsyncAPI                = "asyncapi"
 	CompID                      = "id"
 	CompDefaultContentType      = "defaultContentType"

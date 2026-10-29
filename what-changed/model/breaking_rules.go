@@ -127,6 +127,7 @@ func rule(added, modified, removed bool) *BreakingChangeRule {
 //     removal, never on addition.
 func buildDefaultRules() *BreakingRulesConfig {
 	return &BreakingRulesConfig{
+		MultiFormatSchema:  rule(true, true, true),
 		AsyncAPI:           rule(true, true, true),
 		ID:                 rule(false, true, true),
 		DefaultContentType: rule(false, true, true),
