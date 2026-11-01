@@ -13,6 +13,9 @@ import (
 // compareSchema preserves native schema semantics and unwraps Multi Format
 // Schemas. Foreign schema content is opaque and uses the multiFormatSchema rule.
 func compareSchema(left, right *base.SchemaProxy, config *BreakingRulesConfig) *wcmodel.SchemaChanges {
+	if left.IsReference() && right.IsReference() && left.GetReference() != right.GetReference() {
+		return wcmodel.CompareSchemas(left, right)
+	}
 	lf, rf := lowasync.SchemaFormatNode(left.GetValueNode()), lowasync.SchemaFormatNode(right.GetValueNode())
 	if lf == nil && rf == nil {
 		return wcmodel.CompareSchemas(left, right)
@@ -31,7 +34,7 @@ func compareSchema(left, right *base.SchemaProxy, config *BreakingRulesConfig) *
 	rs, ri := lowasync.SchemaContent(right)
 	jsonLeft, jsonRight := lf == nil || schemaformat.IsJSON(lf.Value), rf == nil || schemaformat.IsJSON(rf.Value)
 	var result *wcmodel.SchemaChanges
-	if jsonLeft && jsonRight && ls != nil && rs != nil {
+	if jsonLeft && jsonRight && ls != nil && rs != nil && ls.Kind == yaml.MappingNode && rs.Kind == yaml.MappingNode {
 		lp, rp := left, right
 		if lf != nil {
 			lp = lowasync.SchemaContentProxy(left)

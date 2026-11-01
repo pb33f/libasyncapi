@@ -56,16 +56,27 @@ func schemaIndexView(root *yaml.Node) (*yaml.Node, map[*yaml.Node]*yaml.Node) {
 }
 
 func multiFormatLocation(path []string) bool {
-	if len(path) == 3 && path[0] == ComponentsLabel && path[1] == SchemasLabel {
-		return true
-	}
-	if len(path) == 4 && path[0] == ComponentsLabel && path[1] == MessagesLabel && path[3] == PayloadLabel {
-		return true
-	}
 	if len(path) > 0 && path[0] == ComponentsLabel {
 		path = path[1:]
+		switch {
+		case len(path) == 2 && path[0] == SchemasLabel:
+			return true
+		case len(path) == 3 && path[0] == MessageTraitsLabel:
+			return path[2] == HeadersLabel
+		case len(path) > 2 && path[0] == MessagesLabel:
+			return messageSchemaField(path[2:])
+		}
 	}
-	return len(path) == 5 && path[0] == ChannelsLabel && path[2] == MessagesLabel && path[4] == PayloadLabel
+	return len(path) > 4 && path[0] == ChannelsLabel && path[2] == MessagesLabel && messageSchemaField(path[4:])
+}
+
+// messageSchemaField reports whether a path below a message is a schema field.
+// Sequences add no path segment, so every trait in a list shares one path.
+func messageSchemaField(path []string) bool {
+	if len(path) == 2 {
+		return path[0] == TraitsLabel && path[1] == HeadersLabel
+	}
+	return len(path) == 1 && (path[0] == PayloadLabel || path[0] == HeadersLabel)
 }
 
 // restoreIndexSources publishes original nodes after reference scanning finishes.

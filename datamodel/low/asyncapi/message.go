@@ -151,7 +151,7 @@ func (m *Message) Build(ctx context.Context, keyNode, root *yaml.Node, idx *inde
 func (m *Message) Hash() uint64 {
 	return low.WithHasher(func(h *maphash.Hash) uint64 {
 		if !m.Headers.IsEmpty() {
-			h.WriteString(low.GenerateHashString(m.Headers.Value))
+			h.WriteString(SchemaHash(m.Headers.Value))
 			h.WriteByte(low.HASH_PIPE)
 		}
 		if !m.Payload.IsEmpty() {
@@ -515,7 +515,7 @@ func (mt *MessageTrait) Build(ctx context.Context, keyNode, root *yaml.Node, idx
 func (mt *MessageTrait) Hash() uint64 {
 	return low.WithHasher(func(h *maphash.Hash) uint64 {
 		if !mt.Headers.IsEmpty() {
-			h.WriteString(low.GenerateHashString(mt.Headers.Value))
+			h.WriteString(SchemaHash(mt.Headers.Value))
 			h.WriteByte(low.HASH_PIPE)
 		}
 		if !mt.CorrelationID.IsEmpty() {
