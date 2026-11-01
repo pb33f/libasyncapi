@@ -190,6 +190,11 @@ config.AllowRemoteReferences = false
 doc, err := libasyncapi.NewDocumentWithConfiguration(spec, config)
 ```
 
+YAML indexing limits alias expansion by default. Excessive aliases leave a partial
+document with errors available through `Errors()`. For trusted input only, set
+`config.AllowExcessiveAliases = true` to disable that limit. Alias cycles remain
+invalid.
+
 ## Rendering and serialization
 
 `Render()` writes the current high-level model. `Serialize()` writes the original YAML tree:

@@ -22,6 +22,10 @@ type DocumentConfiguration struct {
 	// ExcludeExtensionRefs leaves $ref values inside x-* extensions untouched.
 	ExcludeExtensionRefs bool
 
+	// AllowExcessiveAliases disables the indexing expansion limit for trusted YAML.
+	// Alias cycles are still rejected. The default is false.
+	AllowExcessiveAliases bool
+
 	// BasePath is the base path for resolving relative file references.
 	// If empty, the current working directory is used.
 	BasePath string
@@ -76,6 +80,7 @@ func (c *DocumentConfiguration) ToLibOpenAPIConfig() *datamodel.DocumentConfigur
 	return &datamodel.DocumentConfiguration{
 		SpecFilePath:               c.SpecFilePath,
 		ExcludeExtensionRefs:       c.ExcludeExtensionRefs,
+		AllowExcessiveAliases:      c.AllowExcessiveAliases,
 		BasePath:                   c.BasePath,
 		BaseURL:                    c.BaseURL,
 		AllowFileReferences:        c.AllowFileReferences,
