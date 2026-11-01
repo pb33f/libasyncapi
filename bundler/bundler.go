@@ -184,7 +184,7 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 		return nil, fmt.Errorf("#%s requires an array", dest)
 	}
 	if kind == lowasync.SchemasLabel {
-		if err := e.loader.scan(src, kind, src.doc.uri, 0); err != nil {
+		if err := e.loader.scan(src, kind, schemaScope{uri: src.doc.uri}, 0); err != nil {
 			return nil, err
 		}
 	}
@@ -212,13 +212,13 @@ func (e *engine) walk(src target, dest, kind string, depth int) (*yaml.Node, err
 			e.pending = append(e.pending, pendingReference{out, resolved, dest, strings.TrimPrefix(kind, refKindPrefix), preferred})
 			return out, nil
 		}
-		if kind == lowasync.SchemasLabel && src.doc == e.loader.root && e.loader.scopes[src] == src.doc.uri && strings.HasPrefix(ref.Value, "#/") {
+		if kind == lowasync.SchemasLabel && src.doc == e.loader.root && !e.loader.scopes[src].explicit && strings.HasPrefix(ref.Value, "#/") {
 			return reference(n, ref.Value), nil
 		}
 		if kind == lowasync.SchemasLabel && resolved.doc == e.loader.root {
 			return reference(n, localRef(resolved.pointer)), nil
 		}
-		if src.doc == e.loader.root && strings.HasPrefix(ref.Value, "#") && (kind != lowasync.SchemasLabel || e.loader.scopes[src] == src.doc.uri) {
+		if src.doc == e.loader.root && strings.HasPrefix(ref.Value, "#") && (kind != lowasync.SchemasLabel || !e.loader.scopes[src].explicit) {
 			e.placements[resolved] = append(e.placements[resolved], dest)
 			if kind != lowasync.SchemasLabel {
 				// Preserve the local alias even when its terminal target is external.
@@ -370,7 +370,7 @@ func (e *engine) schemaTerminal(t target) (target, error) {
 			return target{}, fmt.Errorf("reference-only schema cycle at %s#%s", t.doc.uri, t.pointer)
 		}
 		seen[t] = true
-		if err := e.loader.scan(t, lowasync.SchemasLabel, t.doc.uri, 0); err != nil {
+		if err := e.loader.scan(t, lowasync.SchemasLabel, schemaScope{uri: t.doc.uri}, 0); err != nil {
 			return target{}, err
 		}
 		n, err := t.node()
