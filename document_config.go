@@ -28,9 +28,12 @@ type DocumentConfiguration struct {
 
 	// BasePath is the base path for resolving relative file references.
 	// If empty, the current working directory is used.
+	// Bundling applies this base to entry-document imports while preserving
+	// SpecFilePath as the entry's identity and fragment-only reference target.
 	BasePath string
 
 	// BaseURL is the base URL for resolving relative URL references.
+	// When bundling, it takes precedence over BasePath for entry-document imports.
 	BaseURL *url.URL
 
 	// AllowFileReferences enables resolution of file:// references.
