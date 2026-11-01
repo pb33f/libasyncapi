@@ -112,6 +112,7 @@ func NewDocumentFromNode(rootNode *yaml.Node, config *DocumentConfiguration) (Do
 	lowConfig := &lowasync.DocumentConfiguration{
 		SpecFilePath:               config.SpecFilePath,
 		ExcludeExtensionRefs:       config.ExcludeExtensionRefs,
+		AllowExcessiveAliases:      config.AllowExcessiveAliases,
 		BasePath:                   config.BasePath,
 		BaseURL:                    config.BaseURL,
 		AllowFileReferences:        config.AllowFileReferences,

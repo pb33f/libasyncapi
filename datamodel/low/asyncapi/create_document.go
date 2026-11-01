@@ -40,6 +40,10 @@ type DocumentConfiguration struct {
 	// ExcludeExtensionRefs skips references inside x-* extensions.
 	ExcludeExtensionRefs bool
 
+	// AllowExcessiveAliases disables the indexing expansion limit for trusted YAML.
+	// Alias cycles are still rejected. The default is false.
+	AllowExcessiveAliases bool
+
 	// BasePath is the base path for resolving relative file references.
 	BasePath string
 
@@ -107,6 +111,7 @@ func CreateDocumentWithConfig(rootNode *yaml.Node, config *DocumentConfiguration
 	idxConfig.UseSchemaQuickHash = true
 	idxConfig.SpecFilePath = config.SpecFilePath
 	idxConfig.ExcludeExtensionRefs = config.ExcludeExtensionRefs
+	idxConfig.AllowExcessiveAliases = config.AllowExcessiveAliases
 	// Register AsyncAPI aliases before the resolver visits their dependents.
 	idxConfig.AvoidCircularReferenceCheck = true
 	idxConfig.ExtractRefsSequentially = config.ExtractRefsSequentially
