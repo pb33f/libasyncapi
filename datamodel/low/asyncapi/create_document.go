@@ -108,7 +108,8 @@ func CreateDocumentWithConfig(rootNode *yaml.Node, config *DocumentConfiguration
 	idxConfig := index.CreateClosedAPIIndexConfig()
 	idxConfig.SkipDocumentCheck = true // AsyncAPI documents don't have openapi/swagger fields
 	// Include resolved schema content in parent hashes, with per-index reuse for shared refs.
-	idxConfig.UseSchemaQuickHash = true
+	// Hashing stops at loops only once they are known, so skipping the check hashes references as text.
+	idxConfig.UseSchemaQuickHash = !config.SkipCircularReferenceCheck
 	idxConfig.SpecFilePath = config.SpecFilePath
 	idxConfig.ExcludeExtensionRefs = config.ExcludeExtensionRefs
 	idxConfig.AllowExcessiveAliases = config.AllowExcessiveAliases

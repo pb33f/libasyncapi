@@ -146,7 +146,9 @@ func CompareMessageTraits(l, r *lowasync.MessageTrait, configs ...*BreakingRules
 	m := new(MessageTraitChanges)
 
 	compareNestedObject(l.Headers, r.Headers, lowasync.HeadersLabel,
-		CompMessageTrait, PropHeaders, &changes, wcmodel.CompareSchemas, &m.HeadersChanges, config)
+		CompMessageTrait, PropHeaders, &changes, func(l, r *base.SchemaProxy) *wcmodel.SchemaChanges {
+			return compareSchema(l, r, config)
+		}, &m.HeadersChanges, config)
 
 	compareNestedObject(l.CorrelationID, r.CorrelationID, lowasync.CorrelationIDLabel,
 		CompMessageTrait, PropCorrelationID, &changes, configuredNestedCompare(config, CompareCorrelationID), &m.CorrelationIDChanges, config)
@@ -322,7 +324,9 @@ func CompareMessages(l, r *lowasync.Message, configs ...*BreakingRulesConfig) *M
 	m := new(MessageChanges)
 
 	compareNestedObject(l.Headers, r.Headers, lowasync.HeadersLabel,
-		CompMessage, PropHeaders, &changes, wcmodel.CompareSchemas, &m.HeadersChanges, config)
+		CompMessage, PropHeaders, &changes, func(l, r *base.SchemaProxy) *wcmodel.SchemaChanges {
+			return compareSchema(l, r, config)
+		}, &m.HeadersChanges, config)
 
 	compareNestedObject(l.Payload, r.Payload, lowasync.PayloadLabel,
 		CompMessage, PropPayload, &changes, func(l, r *base.SchemaProxy) *wcmodel.SchemaChanges {

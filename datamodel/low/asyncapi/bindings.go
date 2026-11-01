@@ -131,7 +131,7 @@ func (h *HTTPOperationBinding) Hash() uint64 {
 			f.WriteByte(low.HASH_PIPE)
 		}
 		if !h.Query.IsEmpty() {
-			f.WriteString(low.GenerateHashString(h.Query.Value))
+			f.WriteString(SchemaHash(h.Query.Value))
 			f.WriteByte(low.HASH_PIPE)
 		}
 		if !h.BindingVersion.IsEmpty() {
@@ -165,7 +165,7 @@ func (h *HTTPMessageBinding) Build(ctx context.Context, keyNode, root *yaml.Node
 func (h *HTTPMessageBinding) Hash() uint64 {
 	return low.WithHasher(func(f *maphash.Hash) uint64 {
 		if !h.Headers.IsEmpty() {
-			f.WriteString(low.GenerateHashString(h.Headers.Value))
+			f.WriteString(SchemaHash(h.Headers.Value))
 			f.WriteByte(low.HASH_PIPE)
 		}
 		if !h.StatusCode.IsEmpty() {
@@ -719,11 +719,11 @@ func (k *KafkaOperationBinding) Build(ctx context.Context, keyNode, root *yaml.N
 func (k *KafkaOperationBinding) Hash() uint64 {
 	return low.WithHasher(func(h *maphash.Hash) uint64 {
 		if !k.GroupID.IsEmpty() {
-			h.WriteString(low.GenerateHashString(k.GroupID.Value))
+			h.WriteString(SchemaHash(k.GroupID.Value))
 			h.WriteByte(low.HASH_PIPE)
 		}
 		if !k.ClientID.IsEmpty() {
-			h.WriteString(low.GenerateHashString(k.ClientID.Value))
+			h.WriteString(SchemaHash(k.ClientID.Value))
 			h.WriteByte(low.HASH_PIPE)
 		}
 		if !k.BindingVersion.IsEmpty() {
@@ -759,7 +759,7 @@ func (k *KafkaMessageBinding) Build(ctx context.Context, keyNode, root *yaml.Nod
 func (k *KafkaMessageBinding) Hash() uint64 {
 	return low.WithHasher(func(h *maphash.Hash) uint64 {
 		if !k.Key.IsEmpty() {
-			h.WriteString(low.GenerateHashString(k.Key.Value))
+			h.WriteString(SchemaHash(k.Key.Value))
 			h.WriteByte(low.HASH_PIPE)
 		}
 		if !k.SchemaIDLocation.IsEmpty() {
@@ -815,11 +815,11 @@ func (w *WebSocketChannelBinding) Hash() uint64 {
 			h.WriteByte(low.HASH_PIPE)
 		}
 		if !w.Query.IsEmpty() {
-			h.WriteString(low.GenerateHashString(w.Query.Value))
+			h.WriteString(SchemaHash(w.Query.Value))
 			h.WriteByte(low.HASH_PIPE)
 		}
 		if !w.Headers.IsEmpty() {
-			h.WriteString(low.GenerateHashString(w.Headers.Value))
+			h.WriteString(SchemaHash(w.Headers.Value))
 			h.WriteByte(low.HASH_PIPE)
 		}
 		if !w.BindingVersion.IsEmpty() {
@@ -1229,7 +1229,7 @@ func (m *MQTTMessageBinding) Hash() uint64 {
 			h.WriteByte(low.HASH_PIPE)
 		}
 		if !m.CorrelationData.IsEmpty() {
-			h.WriteString(low.GenerateHashString(m.CorrelationData.Value))
+			h.WriteString(SchemaHash(m.CorrelationData.Value))
 			h.WriteByte(low.HASH_PIPE)
 		}
 		if !m.ContentType.IsEmpty() {

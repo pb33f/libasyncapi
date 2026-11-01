@@ -35,22 +35,34 @@ func repairReferenceAliases(rolodex *index.Rolodex) map[*index.IndexingError]boo
 				continue
 			}
 			ref := issue.KeyNode.Value
-			target := resolveThroughAliases(idx, ref, make(map[referenceLocation]bool))
+			location := fileReferenceLocation(idx, issue.KeyNode)
+			target := resolveThroughAliases(idx, location, make(map[referenceLocation]bool))
 			if target == nil {
 				continue
 			}
 			alias := *target
-			alias.Definition, alias.FullDefinition = ref, ref
+			alias.Definition, alias.FullDefinition = ref, location
 			mapped := idx.GetMappedReferences()
 			if mapped == nil {
 				mapped = make(map[string]*index.Reference)
 			}
-			mapped[ref] = &alias
+			mapped[ref], mapped[location] = &alias, &alias
 			idx.SetMappedReferences(mapped)
 			resolved[issue] = true
 		}
 	}
 	return resolved
+}
+
+// fileReferenceLocation returns the indexed location of a reference into another
+// file. Local fragments stay as written because they resolve in their own index.
+func fileReferenceLocation(idx *index.SpecIndex, value *yaml.Node) string {
+	if !strings.HasPrefix(value.Value, "#") {
+		if ref := indexedReference(idx, value); ref != nil {
+			return ref.FullDefinition
+		}
+	}
+	return value.Value
 }
 
 func removeRepairedAliasErrors(errs []error, resolved map[*index.IndexingError]bool) []error {
@@ -134,6 +146,7 @@ func resolveThroughAliases(idx *index.SpecIndex, ref string, active map[referenc
 					break
 				}
 				seen[node] = true
+				next = fileReferenceLocation(owner, pointerChild(node, RefLabel))
 				resolved, nextOwner, _ := owner.SearchIndexForReferenceWithContext(context.Background(), next)
 				if resolved == nil {
 					resolved = resolveThroughAliases(owner, next, active)
